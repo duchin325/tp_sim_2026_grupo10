@@ -14,26 +14,27 @@ PRECIO_PELUQUERO = 18_000
 COSTO_BEBIDA = 6_500
 
 
-def simular(dias: int, x: int, cantidad_filas: int) -> dict:
+def simular(dias: int, x: int) -> dict:
     """
     Punto de entrada principal de la simulación.
 
     Parámetros:
-        dias           -- cantidad de días a simular
-        x              -- umbral para calcular P(cola > x personas) en cualquier momento del día
-        cantidad_filas -- número de filas/eventos a incluir en la tabla de salida
+        dias  -- cantidad de días a simular
+        x     -- umbral para calcular P(cola > x personas) en cualquier momento del día
 
-    Retorna un diccionario con los resultados agregados y las filas para la tabla.
+    Retorna un diccionario con los resultados agregados y todas las filas para la tabla.
+    La cantidad de filas es determinada por la simulación (total de eventos generados),
+    no por la UI. La paginación es responsabilidad exclusiva de la interfaz.
     """
     # TODO: Ejecutar _simular_dia() para cada día y acumular ResultadoDia en una lista
     resultados: List[ResultadoDia] = []
     for numero_dia in range(1, dias + 1):
-        resultado = _simular_dia(numero_dia, cantidad_filas)
+        resultado = _simular_dia(numero_dia)
         resultados.append(resultado)
 
     # TODO: Llamar a core.resultados.generar_resumen(resultados, x) con la lista real
-    # Por ahora se devuelven valores mock para que la UI pueda renderizarse
-    filas_mock = _generar_filas_mock(cantidad_filas)
+    # Mock: ~10 eventos por día para que la paginación pueda demostrarse
+    filas_mock = _generar_filas_mock(dias * 10)
 
     return {
         "promedio_recaudacion": 0.0,    # TODO: reemplazar con generar_resumen()["promedio_recaudacion"]
@@ -45,7 +46,7 @@ def simular(dias: int, x: int, cantidad_filas: int) -> dict:
     }
 
 
-def _simular_dia(numero_dia: int, cantidad_filas: int) -> ResultadoDia:
+def _simular_dia(numero_dia: int) -> ResultadoDia:
     """
     Simula un único día de operación de la peluquería.
 
