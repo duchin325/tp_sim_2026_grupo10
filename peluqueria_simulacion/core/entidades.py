@@ -11,6 +11,11 @@ class Cliente:
     tiempo_fin_atencion: float = 0.0
     tiempo_espera: float = 0.0
     servidor_asignado: Optional[str] = None
+    # Longitud de la cola del servidor asignado al momento de iniciar el corte (C en la ED)
+    longitud_cola_al_inicio: int = 0
+    # Resultado de la integración RK4: duración del corte en minutos
+    demora_calculada: float = 0.0
+    # True si esperó más de 30 minutos → recibe bebida gratis
     recibio_bebida: bool = False
 
 
