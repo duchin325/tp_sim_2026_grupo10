@@ -2,15 +2,22 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 from core.simulacion import simular
-from utils.validaciones import validar_inputs_simulacion
+from utils.validaciones import validar_inputs_simulacion, validar_entero_positivo
 
 
 class AplicacionPeluqueria:
     def __init__(self):
+        # Estado de paginación
+        self.filas_simuladas: list = []   # todas las filas (sin encabezado)
+        self.encabezados: list = []        # fila 0 de la tabla
+        self.pagina_actual: int = 1
+        self.filas_por_pagina: int = 10
+        self.total_paginas: int = 0
+
         self.ventana = tk.Tk()
         self.ventana.title("Simulación Peluquería Look")
         self.ventana.resizable(True, True)
-        self.ventana.minsize(900, 650)
+        self.ventana.minsize(900, 680)
         self._construir_ui()
 
     # ------------------------------------------------------------------
@@ -22,6 +29,7 @@ class AplicacionPeluqueria:
         self._construir_panel_inputs()
         self._construir_panel_resultados()
         self._construir_tabla_eventos()
+        self._construir_controles_paginacion()
 
     def _construir_encabezado(self):
         frame = tk.Frame(self.ventana, bg="#2c3e50", pady=12)
@@ -50,11 +58,11 @@ class AplicacionPeluqueria:
         self.entrada_x.insert(0, "3")
         self.entrada_x.grid(row=0, column=3, sticky=tk.W, padx=5)
 
-        # Cantidad de filas
-        tk.Label(frame, text="Filas a mostrar:").grid(row=0, column=4, sticky=tk.W, padx=5)
-        self.entrada_filas = tk.Entry(frame, width=12)
-        self.entrada_filas.insert(0, "100")
-        self.entrada_filas.grid(row=0, column=5, sticky=tk.W, padx=5)
+        # Filas por página
+        tk.Label(frame, text="Filas por página:").grid(row=0, column=4, sticky=tk.W, padx=5)
+        self.entrada_filas_por_pagina = tk.Entry(frame, width=12)
+        self.entrada_filas_por_pagina.insert(0, "10")
+        self.entrada_filas_por_pagina.grid(row=0, column=5, sticky=tk.W, padx=5)
 
         # Botón Simular
         tk.Button(
@@ -75,11 +83,11 @@ class AplicacionPeluqueria:
         frame.pack(fill=tk.X, padx=15, pady=6)
 
         definiciones = [
-            ("Promedio de recaudación diaria:", "label_recaudacion", "$0.00"),
-            (f"P(cola > X personas):",          "label_probabilidad", "0.00%"),
+            ("Promedio de recaudación diaria:", "label_recaudacion",  "$0.00"),
+            ("P(cola > X personas):",           "label_probabilidad", "0.00%"),
             ("Clientes atendidos (total):",      "label_clientes",     "0"),
-            ("Bebidas entregadas (total):",       "label_bebidas",      "0"),
-            ("Costo total de bebidas:",           "label_costo_bebidas","$0.00"),
+            ("Bebidas entregadas (total):",      "label_bebidas",      "0"),
+            ("Costo total de bebidas:",          "label_costo_bebidas","$0.00"),
         ]
 
         for col, (texto, atributo, placeholder) in enumerate(definiciones):
@@ -92,9 +100,8 @@ class AplicacionPeluqueria:
 
     def _construir_tabla_eventos(self):
         frame = tk.LabelFrame(self.ventana, text="Tabla de eventos simulados", padx=8, pady=8)
-        frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=(6, 12))
+        frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=(6, 2))
 
-        # Scrollbars
         scroll_y = tk.Scrollbar(frame, orient=tk.VERTICAL)
         scroll_x = tk.Scrollbar(frame, orient=tk.HORIZONTAL)
 
@@ -119,6 +126,43 @@ class AplicacionPeluqueria:
             "Pel.B Estado", "Pel.B Fin", "Cola Pel.B",
         ])
 
+    def _construir_controles_paginacion(self):
+        frame = tk.Frame(self.ventana, pady=6)
+        frame.pack(fill=tk.X, padx=15, pady=(2, 10))
+
+        self.btn_primera = tk.Button(
+            frame, text="« Primera", command=self._on_primera_pagina,
+            width=9, relief=tk.FLAT, bg="#bdc3c7", cursor="hand2",
+        )
+        self.btn_primera.pack(side=tk.LEFT, padx=3)
+
+        self.btn_anterior = tk.Button(
+            frame, text="‹ Anterior", command=self._on_pagina_anterior,
+            width=9, relief=tk.FLAT, bg="#bdc3c7", cursor="hand2",
+        )
+        self.btn_anterior.pack(side=tk.LEFT, padx=3)
+
+        self.label_pagina = tk.Label(
+            frame, text="Página — de —",
+            font=("Helvetica", 10), width=18,
+        )
+        self.label_pagina.pack(side=tk.LEFT, padx=10)
+
+        self.btn_siguiente = tk.Button(
+            frame, text="Siguiente ›", command=self._on_pagina_siguiente,
+            width=9, relief=tk.FLAT, bg="#bdc3c7", cursor="hand2",
+        )
+        self.btn_siguiente.pack(side=tk.LEFT, padx=3)
+
+        self.btn_ultima = tk.Button(
+            frame, text="Última »", command=self._on_ultima_pagina,
+            width=9, relief=tk.FLAT, bg="#bdc3c7", cursor="hand2",
+        )
+        self.btn_ultima.pack(side=tk.LEFT, padx=3)
+
+        # Deshabilitar hasta que haya resultados
+        self._actualizar_controles_paginacion()
+
     def _configurar_columnas_tabla(self, columnas: list):
         self.tabla["columns"] = columnas
         for col in columnas:
@@ -126,26 +170,43 @@ class AplicacionPeluqueria:
             self.tabla.column(col, width=110, anchor=tk.CENTER, minwidth=80)
 
     # ------------------------------------------------------------------
-    # Lógica de la UI
+    # Lógica de la UI — simulación
     # ------------------------------------------------------------------
 
     def _on_simular(self):
         dias_str = self.entrada_dias.get().strip()
         x_str = self.entrada_x.get().strip()
-        filas_str = self.entrada_filas.get().strip()
+        filas_pp_str = self.entrada_filas_por_pagina.get().strip()
 
-        valido, mensaje_error = validar_inputs_simulacion(dias_str, x_str, filas_str)
+        valido, mensaje_error = validar_inputs_simulacion(dias_str, x_str)
+        if not valido:
+            messagebox.showerror("Error de validación", mensaje_error)
+            return
+
+        valido, mensaje_error = validar_entero_positivo(filas_pp_str, "Filas por página")
         if not valido:
             messagebox.showerror("Error de validación", mensaje_error)
             return
 
         dias = int(dias_str)
         x = int(x_str)
-        cantidad_filas = int(filas_str)
+        self.filas_por_pagina = int(filas_pp_str)
 
-        resultados = simular(dias, x, cantidad_filas)
+        resultados = simular(dias, x)
         self._actualizar_resultados(resultados, x)
-        self._actualizar_tabla(resultados.get("filas_tabla", []))
+
+        # Separar encabezados del resto y guardar todas las filas
+        filas_completas = resultados.get("filas_tabla", [])
+        if filas_completas:
+            self.encabezados = filas_completas[0]
+            self.filas_simuladas = filas_completas[1:]
+        else:
+            self.encabezados = []
+            self.filas_simuladas = []
+
+        total = len(self.filas_simuladas)
+        self.total_paginas = max(1, -(-total // self.filas_por_pagina))  # división techo
+        self._ir_a_pagina(1)
 
     def _actualizar_resultados(self, resultados: dict, x: int):
         self.label_recaudacion.config(
@@ -159,22 +220,62 @@ class AplicacionPeluqueria:
         self.label_costo_bebidas.config(
             text=f"${resultados['costo_total_bebidas']:,.2f}"
         )
-        # Actualizar etiqueta dinámica con el valor de X actual
         self.label_probabilidad.master.winfo_children()[0].config(
             text=f"P(cola > {x} personas):"
         )
 
-    def _actualizar_tabla(self, filas: list):
-        self.tabla.delete(*self.tabla.get_children())
+    # ------------------------------------------------------------------
+    # Lógica de paginación
+    # ------------------------------------------------------------------
 
-        if not filas:
+    def _ir_a_pagina(self, pagina: int):
+        if self.total_paginas == 0:
             return
+        self.pagina_actual = max(1, min(pagina, self.total_paginas))
 
-        encabezados = filas[0]
-        self._configurar_columnas_tabla(encabezados)
+        inicio = (self.pagina_actual - 1) * self.filas_por_pagina
+        fin = inicio + self.filas_por_pagina
+        filas_visibles = self.filas_simuladas[inicio:fin]
 
-        for fila in filas[1:]:
+        self._renderizar_tabla(filas_visibles)
+        self._actualizar_controles_paginacion()
+
+    def _on_primera_pagina(self):
+        self._ir_a_pagina(1)
+
+    def _on_pagina_anterior(self):
+        self._ir_a_pagina(self.pagina_actual - 1)
+
+    def _on_pagina_siguiente(self):
+        self._ir_a_pagina(self.pagina_actual + 1)
+
+    def _on_ultima_pagina(self):
+        self._ir_a_pagina(self.total_paginas)
+
+    def _renderizar_tabla(self, filas: list):
+        self.tabla.delete(*self.tabla.get_children())
+        if self.encabezados:
+            self._configurar_columnas_tabla(self.encabezados)
+        for fila in filas:
             self.tabla.insert("", tk.END, values=fila)
+
+    def _actualizar_controles_paginacion(self):
+        hay_resultados = self.total_paginas > 0
+
+        if hay_resultados:
+            self.label_pagina.config(
+                text=f"Página {self.pagina_actual} de {self.total_paginas}"
+            )
+        else:
+            self.label_pagina.config(text="Página — de —")
+
+        es_primera = (not hay_resultados) or (self.pagina_actual <= 1)
+        es_ultima = (not hay_resultados) or (self.pagina_actual >= self.total_paginas)
+
+        self.btn_primera.config(state=tk.DISABLED if es_primera else tk.NORMAL)
+        self.btn_anterior.config(state=tk.DISABLED if es_primera else tk.NORMAL)
+        self.btn_siguiente.config(state=tk.DISABLED if es_ultima else tk.NORMAL)
+        self.btn_ultima.config(state=tk.DISABLED if es_ultima else tk.NORMAL)
 
     # ------------------------------------------------------------------
 
