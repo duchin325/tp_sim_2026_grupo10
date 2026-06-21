@@ -1,39 +1,52 @@
 from typing import List
 from core.entidades import ResultadoDia
 
-
 def calcular_promedio_recaudacion(resultados: List[ResultadoDia]) -> float:
-    # TODO: Calcular el promedio de recaudación diaria sobre todos los días simulados
+    """Calcula el promedio de recaudación diaria sobre todos los días simulados."""
     if not resultados:
         return 0.0
-    return sum(r.recaudacion for r in resultados) / len(resultados)
+    recaudacion_total = sum(r.recaudacion for r in resultados)
+    return recaudacion_total / len(resultados)
 
 
 def calcular_probabilidad_mas_de_x(resultados: List[ResultadoDia], x: int) -> float:
-    # TODO: Calcular la proporción de eventos en que la cola de espera superó X personas
-    # Se debe recorrer la tabla de filas de cada día y contar cuántas veces la cola > x
+    """
+    Calcula la probabilidad de que en algún día la cola haya superado las X personas.
+    Se define como: (Casos favorables) / (Casos posibles)
+    Casos favorables = Días donde la cola máxima fue estrictamente mayor a X.
+    Casos posibles = Total de días simulados.
+    """
     if not resultados:
         return 0.0
-    return 0.0
+    
+    dias_con_cola_excedida = 0
+    for dia in resultados:
+        if dia.max_cola_espera > x:
+            dias_con_cola_excedida += 1
+            
+    return dias_con_cola_excedida / len(resultados)
 
 
 def calcular_total_clientes_atendidos(resultados: List[ResultadoDia]) -> int:
-    # TODO: Sumar clientes atendidos en todos los días simulados
+    """Suma los clientes atendidos en todos los días simulados."""
     return sum(r.clientes_atendidos for r in resultados)
 
 
 def calcular_total_bebidas(resultados: List[ResultadoDia]) -> int:
-    # TODO: Sumar bebidas entregadas en todos los días simulados
+    """Suma las bebidas entregadas (por espera > 30 min) en todos los días simulados."""
     return sum(r.bebidas_entregadas for r in resultados)
 
 
 def calcular_costo_total_bebidas(resultados: List[ResultadoDia]) -> float:
-    # TODO: Sumar el costo de bebidas de todos los días simulados
+    """Suma el costo total de las bebidas entregadas en todos los días simulados."""
     return sum(r.costo_bebidas for r in resultados)
 
 
 def generar_resumen(resultados: List[ResultadoDia], x: int) -> dict:
-    # TODO: Consolidar todos los indicadores en un único diccionario de resultados
+    """
+    Consolida todos los indicadores en un único diccionario para que
+    la interfaz gráfica (UI) pueda mostrarlos fácilmente.
+    """
     return {
         "promedio_recaudacion": calcular_promedio_recaudacion(resultados),
         "probabilidad_mas_de_x": calcular_probabilidad_mas_de_x(resultados, x),

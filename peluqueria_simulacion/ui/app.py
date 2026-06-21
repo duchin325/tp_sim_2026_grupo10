@@ -8,8 +8,8 @@ from utils.validaciones import validar_inputs_simulacion, validar_entero_positiv
 class AplicacionPeluqueria:
     def __init__(self):
         # Estado de paginación
-        self.filas_simuladas: list = []   # todas las filas (sin encabezado)
-        self.encabezados: list = []        # fila 0 de la tabla
+        self.filas_simuladas: list = []  
+        self.encabezados: list = []       
         self.pagina_actual: int = 1
         self.filas_por_pagina: int = 10
         self.total_paginas: int = 0
@@ -43,40 +43,55 @@ class AplicacionPeluqueria:
         ).pack()
 
     def _construir_panel_inputs(self):
-        frame = tk.LabelFrame(self.ventana, text="Parámetros de entrada", padx=10, pady=10)
-        frame.pack(fill=tk.X, padx=15, pady=(12, 6))
+            frame = tk.LabelFrame(self.ventana, text="Parámetros de entrada", padx=10, pady=10)
+            frame.pack(fill=tk.X, padx=15, pady=(12, 6))
 
-        # Días a simular
-        tk.Label(frame, text="Días a simular:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=4)
-        self.entrada_dias = tk.Entry(frame, width=12)
-        self.entrada_dias.insert(0, "100")
-        self.entrada_dias.grid(row=0, column=1, sticky=tk.W, padx=5)
+            # --- FILA 0: Parámetros del Sistema (X y N) ---
+            tk.Label(frame, text="Tiempo X a simular (Días):").grid(row=0, column=0, sticky=tk.W, padx=5, pady=4)
+            self.entrada_dias = tk.Entry(frame, width=12)
+            self.entrada_dias.insert(0, "100")
+            self.entrada_dias.grid(row=0, column=1, sticky=tk.W, padx=5)
 
-        # Valor de X
-        tk.Label(frame, text="Valor de X (P(cola > X)):").grid(row=0, column=2, sticky=tk.W, padx=5)
-        self.entrada_x = tk.Entry(frame, width=12)
-        self.entrada_x.insert(0, "3")
-        self.entrada_x.grid(row=0, column=3, sticky=tk.W, padx=5)
+            # Límite de iteraciones N
+            tk.Label(frame, text="Iteraciones máximas (N):").grid(row=0, column=2, sticky=tk.W, padx=5)
+            self.entrada_n = tk.Entry(frame, width=12)
+            self.entrada_n.insert(0, "100000")
+            self.entrada_n.grid(row=0, column=3, sticky=tk.W, padx=5)
 
-        # Filas por página
-        tk.Label(frame, text="Filas por página:").grid(row=0, column=4, sticky=tk.W, padx=5)
-        self.entrada_filas_por_pagina = tk.Entry(frame, width=12)
-        self.entrada_filas_por_pagina.insert(0, "10")
-        self.entrada_filas_por_pagina.grid(row=0, column=5, sticky=tk.W, padx=5)
+            tk.Label(frame, text="Umbral de cola (x personas):").grid(row=0, column=4, sticky=tk.W, padx=5)
+            self.entrada_x = tk.Entry(frame, width=12)
+            self.entrada_x.insert(0, "3")
+            self.entrada_x.grid(row=0, column=5, sticky=tk.W, padx=5)
 
-        # Botón Simular
-        tk.Button(
-            frame,
-            text="Simular",
-            command=self._on_simular,
-            bg="#27ae60",
-            fg="white",
-            font=("Helvetica", 10, "bold"),
-            padx=14,
-            pady=4,
-            relief=tk.FLAT,
-            cursor="hand2",
-        ).grid(row=0, column=6, padx=20, pady=4)
+            # --- FILA 1: Visualización e Integración (i, j, h) ---
+            tk.Label(frame, text="Iteraciones a mostrar (i):").grid(row=1, column=0, sticky=tk.W, padx=5, pady=4)
+            self.entrada_i = tk.Entry(frame, width=12)
+            self.entrada_i.insert(0, "100")
+            self.entrada_i.grid(row=1, column=1, sticky=tk.W, padx=5)
+
+            tk.Label(frame, text="Hora inicio (j) min:").grid(row=1, column=2, sticky=tk.W, padx=5)
+            self.entrada_j = tk.Entry(frame, width=12)
+            self.entrada_j.insert(0, "0")
+            self.entrada_j.grid(row=1, column=3, sticky=tk.W, padx=5)
+
+            tk.Label(frame, text="Paso Euler (h):").grid(row=1, column=4, sticky=tk.W, padx=5)
+            self.entrada_h = tk.Entry(frame, width=12)
+            self.entrada_h.insert(0, "1.0")
+            self.entrada_h.grid(row=1, column=5, sticky=tk.W, padx=5)
+
+            # Botón Simular 
+            tk.Button(
+                frame,
+                text="Simular",
+                command=self._on_simular,
+                bg="#27ae60",
+                fg="white",
+                font=("Helvetica", 10, "bold"),
+                padx=14,
+                pady=4,
+                relief=tk.FLAT,
+                cursor="hand2",
+            ).grid(row=1, column=6, padx=20, pady=4)
 
     def _construir_panel_resultados(self):
         frame = tk.LabelFrame(self.ventana, text="Resultados", padx=10, pady=10)
@@ -120,11 +135,22 @@ class AplicacionPeluqueria:
         self.tabla.pack(fill=tk.BOTH, expand=True)
 
         self._configurar_columnas_tabla([
-            "Evento", "Reloj", "RND Llegada", "Próx. Llegada",
-            "Colorista Estado", "Colorista Fin", "Cola Colorista",
-            "Pel.A Estado", "Pel.A Fin", "Cola Pel.A",
-            "Pel.B Estado", "Pel.B Fin", "Cola Pel.B",
+            "Nº Fila", "Día", "Evento", "Reloj", 
+            "RND Lleg.", "Próx. Llegada", 
+            "RND Tipo", "Serv. Elegido", 
+            "Color. Est", "Color. Fin", "Cola C",
+            "Pel.A Est", "Pel.A Fin", "Cola A",
+            "Pel.B Est", "Pel.B Fin", "Cola B",
+            "Euler t", "Euler D", "Euler dD/dt",
+            "Acum. Recaud.", "Cont. Clientes", "Cont. Bebidas"
         ])
+
+        self.tabla.tag_configure(
+            "fila_final", 
+            background="#eaff00",   
+            foreground="#ff1900",   
+            font=("Helvetica", 9, "bold") 
+        )
 
     def _construir_controles_paginacion(self):
         frame = tk.Frame(self.ventana, pady=6)
@@ -174,28 +200,25 @@ class AplicacionPeluqueria:
     # ------------------------------------------------------------------
 
     def _on_simular(self):
-        dias_str = self.entrada_dias.get().strip()
-        x_str = self.entrada_x.get().strip()
-        filas_pp_str = self.entrada_filas_por_pagina.get().strip()
-
-        valido, mensaje_error = validar_inputs_simulacion(dias_str, x_str)
-        if not valido:
-            messagebox.showerror("Error de validación", mensaje_error)
+        try:
+            dias = int(self.entrada_dias.get().strip())
+            n_iteraciones = int(self.entrada_n.get().strip()) 
+            x = int(self.entrada_x.get().strip())
+            iteraciones_i = int(self.entrada_i.get().strip())
+            hora_inicio_j = float(self.entrada_j.get().strip())
+            paso_h = float(self.entrada_h.get().strip())
+            
+            if dias <= 0 or iteraciones_i <= 0 or paso_h <= 0 or hora_inicio_j < 0 or x < 0 or n_iteraciones <= 0:
+                raise ValueError()
+        except ValueError:
+            messagebox.showerror("Error", "Por favor, ingrese valores numéricos válidos. Los días, iteraciones, N y 'h' deben ser mayores a 0.")
             return
 
-        valido, mensaje_error = validar_entero_positivo(filas_pp_str, "Filas por página")
-        if not valido:
-            messagebox.showerror("Error de validación", mensaje_error)
-            return
+        self.filas_por_pagina = 15
 
-        dias = int(dias_str)
-        x = int(x_str)
-        self.filas_por_pagina = int(filas_pp_str)
-
-        resultados = simular(dias, x)
+        resultados = simular(dias, n_iteraciones, x, iteraciones_i, hora_inicio_j, paso_h)
         self._actualizar_resultados(resultados, x)
 
-        # Separar encabezados del resto y guardar todas las filas
         filas_completas = resultados.get("filas_tabla", [])
         if filas_completas:
             self.encabezados = filas_completas[0]
@@ -205,7 +228,7 @@ class AplicacionPeluqueria:
             self.filas_simuladas = []
 
         total = len(self.filas_simuladas)
-        self.total_paginas = max(1, -(-total // self.filas_por_pagina))  # división techo
+        self.total_paginas = max(1, -(-total // self.filas_por_pagina)) 
         self._ir_a_pagina(1)
 
     def _actualizar_resultados(self, resultados: dict, x: int):
@@ -256,8 +279,12 @@ class AplicacionPeluqueria:
         self.tabla.delete(*self.tabla.get_children())
         if self.encabezados:
             self._configurar_columnas_tabla(self.encabezados)
+            
         for fila in filas:
-            self.tabla.insert("", tk.END, values=fila)
+            if len(fila) > 2 and fila[2] == "FIN SIMULACIÓN":
+                self.tabla.insert("", tk.END, values=fila, tags=("fila_final",))
+            else:
+                self.tabla.insert("", tk.END, values=fila)
 
     def _actualizar_controles_paginacion(self):
         hay_resultados = self.total_paginas > 0
@@ -276,8 +303,6 @@ class AplicacionPeluqueria:
         self.btn_anterior.config(state=tk.DISABLED if es_primera else tk.NORMAL)
         self.btn_siguiente.config(state=tk.DISABLED if es_ultima else tk.NORMAL)
         self.btn_ultima.config(state=tk.DISABLED if es_ultima else tk.NORMAL)
-
-    # ------------------------------------------------------------------
 
     def ejecutar(self):
         self.ventana.mainloop()

@@ -1,126 +1,205 @@
-from typing import List
-from core.entidades import ResultadoDia
+import heapq
+from core.entidades import ResultadoDia, Cliente, Servidor, Evento
+from core.distribuciones import generar_tiempo_llegada, seleccionar_tipo_cliente
+from core.euler import calcular_demora_corte_euler
+from core.resultados import generar_resumen
 
-# Importaciones que se usarán cuando se implemente la simulación completa:
-#   from core.distribuciones import generar_tiempo_llegada, seleccionar_tipo_cliente
-#   from core.runge_kutta import calcular_demora_corte
-#   from core.resultados import generar_resumen
-
-# Constantes del dominio
-DURACION_RECEPCION_MIN = 480   # 8 horas en minutos
-TIEMPO_ESPERA_BEBIDA = 30      # minutos; si el cliente espera más, recibe bebida gratis
+DURACION_RECEPCION_MIN = 480   
+TIEMPO_ESPERA_BEBIDA = 30      
 PRECIO_COLORISTA = 35_000
 PRECIO_PELUQUERO = 18_000
 COSTO_BEBIDA = 6_500
 
-
-def simular(dias: int, x: int) -> dict:
-    """
-    Punto de entrada principal de la simulación.
-
-    Parámetros:
-        dias  -- cantidad de días a simular
-        x     -- umbral para calcular P(cola > x personas) en cualquier momento del día
-
-    Retorna un diccionario con los resultados agregados y todas las filas para la tabla.
-    La cantidad de filas es determinada por la simulación (total de eventos generados),
-    no por la UI. La paginación es responsabilidad exclusiva de la interfaz.
-    """
-    # TODO: Ejecutar _simular_dia() para cada día y acumular ResultadoDia en una lista
-    resultados: List[ResultadoDia] = []
-    for numero_dia in range(1, dias + 1):
-        resultado = _simular_dia(numero_dia)
-        resultados.append(resultado)
-
-    # TODO: Llamar a core.resultados.generar_resumen(resultados, x) con la lista real
-    # Mock: ~10 eventos por día para que la paginación pueda demostrarse
-    filas_mock = _generar_filas_mock(dias * 10)
-
-    return {
-        "promedio_recaudacion": 0.0,    # TODO: reemplazar con generar_resumen()["promedio_recaudacion"]
-        "probabilidad_mas_de_x": 0.0,   # TODO: reemplazar con generar_resumen()["probabilidad_mas_de_x"]
-        "clientes_atendidos": 0,         # TODO: reemplazar con total real
-        "bebidas_entregadas": 0,         # TODO: reemplazar con total real
-        "costo_total_bebidas": 0.0,      # TODO: reemplazar con total real
-        "filas_tabla": filas_mock,
-    }
-
-
-def _simular_dia(numero_dia: int) -> ResultadoDia:
-    """
-    Simula un único día de operación de la peluquería.
-
-    Fases del día:
-      1. Recepción activa: 480 minutos (8 horas) en que llegan nuevos clientes.
-         Las llegadas se generan con generar_tiempo_llegada() → U(2, 12).
-      2. Cierre: se deja de recibir clientes pero se atiende a todos los que quedaron.
-
-    Tiempo de atención (demora del corte):
-      - Se calcula con calcular_demora_corte(tipo_servidor, C, pasos)
-        donde C = longitud_cola_al_inicio del cliente que comienza a ser atendido.
-      - T = 180 para el colorista; T = 130 para Peluquero A y Peluquero B.
-      - TODO: definir el valor de `pasos` una vez que se aclare el criterio de
-              finalización de la integración RK4.
-
-    Lógica de bebida:
-      - Si cliente.tiempo_espera > TIEMPO_ESPERA_BEBIDA (30 min) → recibio_bebida = True
-      - Cada bebida tiene costo COSTO_BEBIDA ($6.500)
-
-    Recaudación por cliente:
-      - Colorista: PRECIO_COLORISTA ($35.000)
-      - Peluquero A o B: PRECIO_PELUQUERO ($18.000)
-    """
-    resultado = ResultadoDia(numero_dia=numero_dia)
-
-    # TODO: Inicializar el reloj de simulación en 0
-    # TODO: Generar primer evento de llegada con generar_tiempo_llegada()
-    # TODO: Inicializar los 3 servidores usando la clase Servidor:
-    #         - Servidor("Colorista",   "colorista")
-    #         - Servidor("Peluquero A", "peluquero_a")
-    #         - Servidor("Peluquero B", "peluquero_b")
-    # TODO: Inicializar una cola de espera (list o deque) por cada servidor
-    # TODO: Inicializar contadores de recaudación, bebidas y cola máxima
-
-    # TODO: Bucle principal — mientras haya eventos en la priority queue (heapq):
-    #
-    #   [EVENTO LLEGADA]
-    #   - Avanzar reloj al tiempo del evento
-    #   - Crear Cliente con tipo = seleccionar_tipo_cliente()
-    #   - Registrar cliente.tiempo_llegada = reloj
-    #   - Si el servidor correspondiente está libre:
-    #       · cliente.longitud_cola_al_inicio = 0
-    #       · cliente.demora_calculada = calcular_demora_corte(tipo, 0, pasos)
-    #       · marcar servidor ocupado, programar evento "fin_atencion"
-    #   - Si está ocupado:
-    #       · encolar el cliente en la cola del servidor
-    #   - Si reloj < DURACION_RECEPCION_MIN: generar y encolar próxima llegada
-    #   - Guardar snapshot en resultado.filas_tabla si el índice de fila corresponde
-    #
-    #   [EVENTO FIN_ATENCION]
-    #   - Avanzar reloj al tiempo del evento
-    #   - Calcular cliente.tiempo_espera = cliente.tiempo_inicio_atencion - cliente.tiempo_llegada
-    #   - Si tiempo_espera > TIEMPO_ESPERA_BEBIDA → recibio_bebida = True, sumar a resultado
-    #   - Sumar recaudación según tipo de cliente (PRECIO_COLORISTA o PRECIO_PELUQUERO)
-    #   - Si la cola del servidor no está vacía:
-    #       · Sacar siguiente cliente de la cola
-    #       · cliente.longitud_cola_al_inicio = len(cola) al momento de iniciar
-    #       · cliente.demora_calculada = calcular_demora_corte(tipo, C, pasos)
-    #       · Programar nuevo evento "fin_atencion"
-    #   - Si la cola está vacía: marcar servidor como libre
-
-    return resultado
-
-
-def _generar_filas_mock(cantidad_filas: int) -> list:
-    """Genera filas de ejemplo para la tabla mientras no hay simulación real."""
+def simular(dias: int, n_iteraciones: int, x: int, iteraciones_i: int, hora_inicio_j: float, paso_h: float) -> dict:
+    resultados = []
+    filas_tabla = []
+    
     columnas = [
-        "Evento", "Reloj", "RND Llegada", "Próx. Llegada",
-        "Colorista Estado", "Colorista Fin", "Cola Colorista",
-        "Pel.A Estado", "Pel.A Fin", "Cola Pel.A",
-        "Pel.B Estado", "Pel.B Fin", "Cola Pel.B",
+            "Nº Fila", "Día", "Evento", "Reloj", 
+            "RND Lleg.", "Próx. Llegada", 
+            "RND Tipo", "Serv. Elegido",
+            "Color. Est", "Color. Fin", "Cola C",
+            "Pel.A Est", "Pel.A Fin", "Cola A",
+            "Pel.B Est", "Pel.B Fin", "Cola B",
+            "Euler t", "Euler D", "Euler dD/dt",
+            "Acum. Recaud.", "Cont. Clientes", "Cont. Bebidas"
     ]
-    filas = [columnas]
-    for i in range(1, cantidad_filas + 1):
-        fila = [str(i), "-", "-", "-", "Libre", "-", "0", "Libre", "-", "0", "Libre", "-", "0"]
-        filas.append(fila)
-    return filas
+    filas_tabla.append(columnas)
+    
+    reloj_global = 0.0
+    filas_guardadas = 0
+
+    # Contador global para el límite N
+    iteraciones_totales = 0 
+    limite_alcanzado = False
+    ultima_fila = None
+
+    # Parametrización de Euler (10 pasos como base temporal)
+    PASOS_EULER = 10 
+
+    for numero_dia in range(1, dias + 1):
+        if limite_alcanzado:
+            break
+
+        reloj_dia = 0.0
+        eventos = []
+        
+        colorista = Servidor("Colorista", "colorista")
+        pel_a = Servidor("Peluquero A", "peluquero_a")
+        pel_b = Servidor("Peluquero B", "peluquero_b")
+        
+        colas = {
+            "colorista": [],
+            "peluquero_a": [],
+            "peluquero_b": []
+        }
+        
+        resultado_dia = ResultadoDia(numero_dia=numero_dia)
+        
+        rnd_llegada, tiempo_llegada = generar_tiempo_llegada()
+        prox_llegada = reloj_dia + tiempo_llegada
+        heapq.heappush(eventos, Evento(prox_llegada, "llegada"))
+        
+        while eventos:
+            if iteraciones_totales >= n_iteraciones:
+                limite_alcanzado = True
+                break
+
+            evento = heapq.heappop(eventos)
+            iteraciones_totales += 1
+            reloj_dia = evento.tiempo
+            reloj_global_actual = reloj_global + reloj_dia
+            euler_t, euler_d, euler_deriv = "-", "-", "-"
+            rnd_llegada_actual = "-" 
+            rnd_tipo_actual = "-" 
+            servidor_elegido_actual = "-"
+
+            
+            if evento.tipo == "llegada":
+                if reloj_dia < DURACION_RECEPCION_MIN:
+                    rnd_llegada_actual, t_llegada = generar_tiempo_llegada()
+                    prox_llegada = reloj_dia + t_llegada
+                    heapq.heappush(eventos, Evento(prox_llegada, "llegada"))
+                else:
+                    prox_llegada = "-"
+
+                rnd_tipo_actual, tipo_req = seleccionar_tipo_cliente()
+                if tipo_req == "colorista":
+                    servidor_elegido_actual = "Colorista"
+                elif tipo_req == "peluquero_a":
+                    servidor_elegido_actual = "Pel. A"
+                else:
+                    servidor_elegido_actual = "Pel. B"
+                nuevo_cliente = Cliente(numero=resultado_dia.clientes_atendidos + 1, tipo=tipo_req, tiempo_llegada=reloj_dia)
+                
+                # Asignación de servidor
+                if tipo_req == "colorista":
+                    srv_asignado = colorista
+                elif tipo_req == "peluquero_a":
+                    srv_asignado = pel_a
+                else:
+                    srv_asignado = pel_b
+                    
+                if not srv_asignado.ocupado:
+                    srv_asignado.ocupado = True
+                    nuevo_cliente.longitud_cola_al_inicio = 0
+                    nuevo_cliente.tiempo_inicio_atencion = reloj_dia
+                    
+                    # Llamada numérica al integrador
+                    demora, historial = calcular_demora_corte_euler(tipo_req, 0, paso_h, PASOS_EULER)
+                    euler_t = historial[-1]['t']
+                    euler_d = historial[-1]['D']
+                    euler_deriv = historial[-1]['dD/dt']
+                    
+                    nuevo_cliente.demora_calculada = demora
+                    tiempo_fin = reloj_dia + demora
+                    srv_asignado.tiempo_libre = tiempo_fin  # Anotamos a qué hora se desocupará
+                    heapq.heappush(eventos, Evento(tiempo_fin, f"fin_{tipo_req}", cliente=nuevo_cliente, servidor=srv_asignado))
+                else:
+                    colas[tipo_req].append(nuevo_cliente)
+                    if len(colas[tipo_req]) > resultado_dia.max_cola_espera:
+                        resultado_dia.max_cola_espera = len(colas[tipo_req])
+                        
+            elif evento.tipo.startswith("fin_"):
+                cliente_saliente = evento.cliente
+                srv_liberado = evento.servidor
+                
+                resultado_dia.clientes_atendidos += 1
+                tiempo_espera = cliente_saliente.tiempo_inicio_atencion - cliente_saliente.tiempo_llegada
+                
+                if tiempo_espera > TIEMPO_ESPERA_BEBIDA:
+                    resultado_dia.bebidas_entregadas += 1
+                    resultado_dia.costo_bebidas += COSTO_BEBIDA
+                    
+                if cliente_saliente.tipo == "colorista":
+                    resultado_dia.recaudacion += PRECIO_COLORISTA
+                else:
+                    resultado_dia.recaudacion += PRECIO_PELUQUERO
+                    
+                # Tirar de la cola si hay gente
+                tipo_srv = srv_liberado.tipo
+                if colas[tipo_srv]:
+                    cliente_esperando = colas[tipo_srv].pop(0)
+                    longitud_actual = len(colas[tipo_srv]) + 1 # +1 porque sacamos recién al que va a ser atendido
+                    cliente_esperando.longitud_cola_al_inicio = longitud_actual
+                    cliente_esperando.tiempo_inicio_atencion = reloj_dia
+                    
+                    demora, historial = calcular_demora_corte_euler(tipo_srv, longitud_actual, paso_h, PASOS_EULER)
+                    euler_t = historial[-1]['t']
+                    euler_d = historial[-1]['D']
+                    euler_deriv = historial[-1]['dD/dt']
+                    
+                    tiempo_fin = reloj_dia + demora
+                    srv_liberado.tiempo_libre = tiempo_fin
+                    heapq.heappush(eventos, Evento(tiempo_fin, f"fin_{tipo_srv}", cliente=cliente_esperando, servidor=srv_liberado))
+                else:
+                    srv_liberado.ocupado = False
+                    srv_liberado.tiempo_libre = 0.0
+
+            # Construir la fila actual en TODAS las iteraciones
+            fila_actual = [
+                iteraciones_totales,
+                numero_dia,
+                evento.tipo,
+                round(reloj_dia, 2),
+                round(rnd_llegada_actual, 4) if isinstance(rnd_llegada_actual, float) else rnd_llegada_actual,
+                round(prox_llegada, 2) if isinstance(prox_llegada, float) else prox_llegada,
+                round(rnd_tipo_actual, 4) if isinstance(rnd_tipo_actual, float) else rnd_tipo_actual,
+                servidor_elegido_actual,  # NUEVO: Queda pegado a su RND
+                "Ocupado" if colorista.ocupado else "Libre",
+                round(colorista.tiempo_libre, 2) if colorista.ocupado else "-", 
+                len(colas["colorista"]),
+                "Ocupado" if pel_a.ocupado else "Libre",
+                round(pel_a.tiempo_libre, 2) if pel_a.ocupado else "-", 
+                len(colas["peluquero_a"]),
+                "Ocupado" if pel_b.ocupado else "Libre",
+                round(pel_b.tiempo_libre, 2) if pel_b.ocupado else "-", 
+                len(colas["peluquero_b"]),
+                euler_t,
+                euler_d,
+                euler_deriv,
+                resultado_dia.recaudacion,
+                resultado_dia.clientes_atendidos,
+                resultado_dia.bebidas_entregadas
+            ]
+            
+            # Actualizar siempre la última fila conocida
+            ultima_fila = list(fila_actual)
+
+            # Guardar en la tabla SOLO si entra en los parámetros (i, j) solicitados
+            if reloj_global_actual >= hora_inicio_j and filas_guardadas < iteraciones_i:
+                filas_tabla.append(fila_actual)
+                filas_guardadas += 1
+
+        reloj_global += reloj_dia
+        resultados.append(resultado_dia)
+
+#Mostrar siempre la última fila
+    if ultima_fila:
+        ultima_fila[2] = "FIN SIMULACIÓN" 
+        ultima_fila[17], ultima_fila[18], ultima_fila[19] = "-", "-", "-" 
+        filas_tabla.append(ultima_fila)
+
+    resumen = generar_resumen(resultados, x)
+    resumen["filas_tabla"] = filas_tabla
+    return resumen
