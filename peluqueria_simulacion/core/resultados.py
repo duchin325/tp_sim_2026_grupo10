@@ -10,11 +10,14 @@ def calcular_promedio_recaudacion(resultados: List[ResultadoDia]) -> float:
 
 
 def calcular_probabilidad_mas_de_x(resultados: List[ResultadoDia], x: int) -> float:
-    # TODO: Calcular la proporción de eventos en que la cola de espera superó X personas
-    # Se debe recorrer la tabla de filas de cada día y contar cuántas veces la cola > x
+    """
+    Calcula la proporción de días en que, en algún momento,
+    la cantidad total de personas esperando en cola superó X.
+    """
     if not resultados:
         return 0.0
-    return 0.0
+    dias_superado = sum(1 for r in resultados if r.max_cola_espera > x)
+    return dias_superado / len(resultados)
 
 
 def calcular_total_clientes_atendidos(resultados: List[ResultadoDia]) -> int:

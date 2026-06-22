@@ -18,11 +18,54 @@ class AplicacionPeluqueria:
         self.ventana.title("Simulación Peluquería Look")
         self.ventana.resizable(True, True)
         self.ventana.minsize(900, 680)
+        self._configurar_estilos()
         self._construir_ui()
 
     # ------------------------------------------------------------------
     # Construcción de la interfaz
     # ------------------------------------------------------------------
+
+    def _configurar_estilos(self):
+        """Configura el tema y estilos de la tabla para bordes visibles."""
+        estilo = ttk.Style()
+        estilo.theme_use("clam")
+
+        # Encabezados con fondo oscuro, texto blanco y borde negro sólido
+        estilo.configure(
+            "Treeview.Heading",
+            background="#2c3e50",
+            foreground="white",
+            font=("Helvetica", 9, "bold"),
+            relief="solid",
+            borderwidth=1,
+            bordercolor="black",
+        )
+        estilo.map(
+            "Treeview.Heading",
+            background=[("active", "#34495e")],
+        )
+
+        # Celdas con bordes negros visibles entre filas y columnas
+        estilo.configure(
+            "Treeview",
+            background="white",
+            fieldbackground="white",
+            foreground="black",
+            rowheight=26,
+            borderwidth=1,
+            relief="solid",
+        )
+        # Configurar el layout del item para agregar bordes a cada celda
+        estilo.layout("Treeview", [
+            ("Treeview.treearea", {"sticky": "nswe", "border": 1}),
+        ])
+
+        # Filas alternas para mejor legibilidad
+        estilo.map(
+            "Treeview",
+            background=[("selected", "#3498db")],
+            foreground=[("selected", "white")],
+        )
 
     def _construir_ui(self):
         self._construir_encabezado()
@@ -120,7 +163,7 @@ class AplicacionPeluqueria:
         self.tabla.pack(fill=tk.BOTH, expand=True)
 
         self._configurar_columnas_tabla([
-            "Evento", "Reloj", "RND Llegada", "Próx. Llegada",
+            "Día", "Evento", "Reloj", "RND Llegada", "Próx. Llegada",
             "Colorista Estado", "Colorista Fin", "Cola Colorista",
             "Pel.A Estado", "Pel.A Fin", "Cola Pel.A",
             "Pel.B Estado", "Pel.B Fin", "Cola Pel.B",
@@ -167,7 +210,9 @@ class AplicacionPeluqueria:
         self.tabla["columns"] = columnas
         for col in columnas:
             self.tabla.heading(col, text=col)
-            self.tabla.column(col, width=110, anchor=tk.CENTER, minwidth=80)
+            # stretch=False evita que las columnas se compriman al ancho de
+            # la ventana, permitiendo que el scrollbar horizontal funcione.
+            self.tabla.column(col, width=120, anchor=tk.CENTER, minwidth=90, stretch=False)
 
     # ------------------------------------------------------------------
     # Lógica de la UI — simulación
@@ -256,8 +301,14 @@ class AplicacionPeluqueria:
         self.tabla.delete(*self.tabla.get_children())
         if self.encabezados:
             self._configurar_columnas_tabla(self.encabezados)
-        for fila in filas:
-            self.tabla.insert("", tk.END, values=fila)
+
+        # Configurar colores alternados (zebra striping)
+        self.tabla.tag_configure("par", background="#e8ecf1")
+        self.tabla.tag_configure("impar", background="white")
+
+        for i, fila in enumerate(filas):
+            tag = "par" if i % 2 == 0 else "impar"
+            self.tabla.insert("", tk.END, values=fila, tags=(tag,))
 
     def _actualizar_controles_paginacion(self):
         hay_resultados = self.total_paginas > 0

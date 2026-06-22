@@ -45,6 +45,8 @@ El tiempo de demora de un corte **no** sigue una distribución uniforme. Está d
 dD/dt = C + 0.2·T + t²
 ```
 
+Con un solo paso de Euler (h = 1), la demora resulta **D = C + 0.2·T** minutos.
+
 | Variable | Significado |
 |----------|-------------|
 | `D`      | Demora acumulada del corte (minutos) |
@@ -52,16 +54,14 @@ dD/dt = C + 0.2·T + t²
 | `C`      | Longitud de la cola del servidor al momento de **iniciar** el corte |
 | `T`      | Constante del servidor: **180** para el colorista, **130** para los peluqueros |
 
-### Método numérico: Runge-Kutta de cuarto orden
+### Método numérico: Euler
 
-La ecuación diferencial se resuelve numéricamente con **RK4** y paso de integración **h = 1 minuto**.
+La ecuación diferencial se resuelve numéricamente con el **método de Euler** y paso de integración **h = 1 minuto** (1 paso por defecto).
 
-Implementado en `core/runge_kutta.py`:
+Implementado en `core/euler.py`:
 - `derivada_demora(t, D, C, T)` — define la ED
-- `runge_kutta_4(f, t0, y0, h, pasos, C, T)` — integrador genérico RK4
+- `euler(f, t0, y0, h, pasos, C, T)` — integrador genérico Euler
 - `calcular_demora_corte(tipo_servidor, longitud_cola_inicial, pasos)` — función principal
-
-> **TODO**: el criterio de finalización de la integración (número de pasos) está pendiente de confirmar con el enunciado.
 
 ### Reglas económicas
 
@@ -98,7 +98,8 @@ peluqueria_simulacion/
 │   ├── simulacion.py        # Orquesta la simulación; constantes del dominio
 │   ├── entidades.py         # Dataclasses: Cliente, Servidor, Evento, ResultadoDia
 │   ├── distribuciones.py    # Llegadas U(2,12) y selección de tipo de cliente
-│   ├── runge_kutta.py       # Ecuación diferencial + integrador RK4
+│   ├── euler.py             # Ecuación diferencial + integrador Euler
+│   ├── runge_kutta.py       # (obsoleto — reemplazado por euler.py)
 │   └── resultados.py        # Cálculo de indicadores finales
 │
 ├── utils/
@@ -113,13 +114,13 @@ peluqueria_simulacion/
 ## Estado actual del proyecto
 
 - [x] Estructura de módulos creada
-- [x] Interfaz gráfica inicial (Tkinter) con inputs y tabla placeholder
+- [x] Interfaz gráfica (Tkinter) con inputs, resultados y tabla paginada
 - [x] Distribuciones de llegada y selección de tipo de cliente
-- [x] Módulo `runge_kutta.py` preparado (ED + RK4 + `calcular_demora_corte`)
+- [x] Módulo `euler.py` (ED + Euler + `calcular_demora_corte`)
 - [x] Constantes del dominio centralizadas en `simulacion.py`
-- [ ] Lógica completa de eventos discretos (bucle principal, priority queue)
-- [ ] Colas de espera por servidor
-- [ ] Recaudación y bebidas por cliente
-- [ ] Cálculo de probabilidad P(cola > X)
-- [ ] Tabla de eventos con snapshots del estado
-- [ ] Simulación de múltiples días
+- [x] Lógica completa de eventos discretos (bucle principal, priority queue con `heapq`)
+- [x] Colas de espera por servidor (`deque`)
+- [x] Recaudación y bebidas por cliente
+- [x] Cálculo de probabilidad P(cola > X)
+- [x] Tabla de eventos con snapshots del estado
+- [x] Simulación de múltiples días
