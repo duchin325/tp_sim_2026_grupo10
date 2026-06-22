@@ -163,10 +163,11 @@ class AplicacionPeluqueria:
         self.tabla.pack(fill=tk.BOTH, expand=True)
 
         self._configurar_columnas_tabla([
-            "Día", "Evento", "Reloj", "RND Llegada", "Próx. Llegada",
-            "Colorista Estado", "Colorista Fin", "Cola Colorista",
-            "Pel.A Estado", "Pel.A Fin", "Cola Pel.A",
-            "Pel.B Estado", "Pel.B Fin", "Cola Pel.B",
+            "Día", "Evento", "Reloj", "Nro. Cliente", "RND Llegada", "T. Entre", "Próx. Llegada", "RND Tipo", "Tipo Asignado",
+            "Col. Estado", "Col. T.At", "Col. Fin", "Cola Col.",
+            "Pel.A Estado", "Pel.A T.At", "Pel.A Fin", "Cola Pel.A",
+            "Pel.B Estado", "Pel.B T.At", "Pel.B Fin", "Cola Pel.B",
+            "Acum. Recaud.", "Acum. Refrig."
         ])
 
     def _construir_controles_paginacion(self):
