@@ -283,12 +283,16 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
 
             cliente = evento.cliente
 
+            if not cliente.en_cola: 
+                continue  # El cliente ya fue atendido, no necesita refrigerio
+
             if (
                 cliente.en_cola
                 and not cliente.recibio_bebida
             ):
 
                 cliente.recibio_bebida = True
+                cliente.hora_refrigerio = 0.0
 
                 bebidas += 1
                 costo_bebidas += COSTO_BEBIDA
@@ -343,6 +347,7 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
             if cola:
                 next_cliente = cola.popleft()
                 next_cliente.en_cola = False
+                next_cliente.hora_refrigerio = 0.0
                 next_cliente.tiempo_inicio_atencion = reloj
                 next_cliente.longitud_cola_al_inicio = len(cola)
                 demora = calcular_demora_corte(tipo_servidor, len(cola))
