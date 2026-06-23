@@ -57,9 +57,19 @@ def simular(n_dias: int, x_cola: int, h_euler: float = 1.0) -> dict:
     nro_fila_global = 0
     iteraciones_totales = 0
 
+    recaudacion_acumulada = 0.0
+    bebidas_acumuladas = 0
+    costo_bebidas_acumulado = 0.0
+
     for numero_dia in range(1, n_dias + 1):
-        resultado, iteraciones_dia = _simular_dia(
-            numero_dia, h_euler, nro_fila_global, iteraciones_totales
+        resultado, iteraciones_dia, recaudacion_acumulada, bebidas_acumuladas, costo_bebidas_acumulado = _simular_dia(
+            numero_dia,
+            h_euler,
+            nro_fila_global,
+            iteraciones_totales,
+            recaudacion_acumulada,
+            bebidas_acumuladas,
+            costo_bebidas_acumulado,
         )
         resultados.append(resultado)
 
@@ -77,7 +87,7 @@ def simular(n_dias: int, x_cola: int, h_euler: float = 1.0) -> dict:
         if iteraciones_totales >= MAX_ITERACIONES:
             break
 
-    resumen = generar_resumen(resultados, x_cola)
+    resumen = generar_resumen(recaudacion_acumulada, len(resultados), resultados, x_cola)
 
     filas_tabla = [_COLUMNAS_TABLA] + todas_las_filas
 
@@ -195,12 +205,15 @@ def _generar_snapshot(nro_fila, dia, tipo_evento, reloj,
 
 
 def _simular_dia(numero_dia: int, h_euler: float,
-                 nro_fila_offset: int, iteraciones_previas: int) -> tuple:
+                 nro_fila_offset: int, iteraciones_previas: int,
+                 recaudacion_inicial: float, bebidas_inicial: int,
+                 costo_bebidas_inicial: float) -> tuple:
     """
     Simula un día completo de la peluquería.
 
     Retorna:
-        (ResultadoDia, iteraciones_dia)
+        (ResultadoDia, iteraciones_dia, recaudacion_acumulada, bebidas_acumuladas,
+         costo_bebidas_acumulado)
     """
     resultado = ResultadoDia(numero_dia=numero_dia)
 
@@ -226,6 +239,9 @@ def _simular_dia(numero_dia: int, h_euler: float,
     recaudacion = 0.0
     bebidas = 0
     costo_bebidas = 0.0
+    recaudacion_acumulada = recaudacion_inicial
+    bebidas_acumuladas = bebidas_inicial
+    costo_bebidas_acumulado = costo_bebidas_inicial
     numero_cliente = 0
     clientes_atendidos = 0
     max_total_en_espera = 0
@@ -246,7 +262,7 @@ def _simular_dia(numero_dia: int, h_euler: float,
             None, rnd_llegada, tiempo_entre, prox_llegada,
             None, None, servidores, colas, fin_atencion,
             [],  # sin eventos aún en el heap
-            recaudacion, bebidas, costo_bebidas,
+            recaudacion_acumulada, bebidas_acumuladas, costo_bebidas_acumulado,
             clientes_atendidos, max_total_en_espera
         )
     )
@@ -333,7 +349,7 @@ def _simular_dia(numero_dia: int, h_euler: float,
                     numero_cliente, rnd_llegada_sig, t_entre, prox_llegada,
                     rnd_tipo, tipo_cliente, servidores, colas, fin_atencion,
                     eventos,
-                    recaudacion, bebidas, costo_bebidas,
+                    recaudacion_acumulada, bebidas_acumuladas, costo_bebidas_acumulado,
                     clientes_atendidos, max_total_en_espera
                 )
             )
@@ -352,16 +368,20 @@ def _simular_dia(numero_dia: int, h_euler: float,
             cliente.estado = "atendido"
             cliente.tiempo_espera = cliente.tiempo_inicio_atencion - cliente.tiempo_llegada
 
-            # Si el cliente fue marcado como elegible para refrigerio, o esperó más de 30 min
-            if cliente.elegible_refrigerio or cliente.tiempo_espera > TIEMPO_ESPERA_BEBIDA:
+            # El refresco ya se cuenta cuando el cliente supera 30 minutos en cola.
+            if cliente.elegible_refrigerio and not cliente.recibio_bebida:
                 cliente.recibio_bebida = True
                 bebidas += 1
                 costo_bebidas += COSTO_BEBIDA
+                bebidas_acumuladas += 1
+                costo_bebidas_acumulado += COSTO_BEBIDA
 
             if tipo_servidor == "colorista":
                 recaudacion += PRECIO_COLORISTA
+                recaudacion_acumulada += PRECIO_COLORISTA
             else:
                 recaudacion += PRECIO_PELUQUERO
+                recaudacion_acumulada += PRECIO_PELUQUERO
 
             servidor.clientes_atendidos += 1
             clientes_atendidos += 1
@@ -407,7 +427,7 @@ def _simular_dia(numero_dia: int, h_euler: float,
                     cliente.numero, None, None, None,
                     None, None, servidores, colas, fin_atencion,
                     eventos,
-                    recaudacion, bebidas, costo_bebidas,
+                    recaudacion_acumulada, bebidas_acumuladas, costo_bebidas_acumulado,
                     clientes_atendidos, max_total_en_espera
                 )
             )
@@ -425,7 +445,13 @@ def _simular_dia(numero_dia: int, h_euler: float,
             # Verificar si el cliente aún está en la cola (no ha sido atendido)
             if cliente in cola and not cliente.elegible_refrigerio:
                 cliente.elegible_refrigerio = True
+                cliente.recibio_bebida = True
                 cliente.tiempo_comienzo_refrigerio = reloj
+                bebidas += 1
+                costo_bebidas += COSTO_BEBIDA
+                bebidas_acumuladas += 1
+                costo_bebidas_acumulado += COSTO_BEBIDA
+                recaudacion_acumulada -= COSTO_BEBIDA
 
                 nro_fila_actual = nro_fila_offset + nro_fila_local
                 resultado.filas_tabla.append(
@@ -434,7 +460,7 @@ def _simular_dia(numero_dia: int, h_euler: float,
                         cliente.numero, None, None, None,
                         None, None, servidores, colas, fin_atencion,
                         eventos,
-                        recaudacion, bebidas, costo_bebidas,
+                        recaudacion_acumulada, bebidas_acumuladas, costo_bebidas_acumulado,
                         clientes_atendidos, max_total_en_espera
                     )
                 )
@@ -449,4 +475,10 @@ def _simular_dia(numero_dia: int, h_euler: float,
     resultado.costo_bebidas = costo_bebidas
     resultado.max_cola_espera = max_total_en_espera
 
-    return resultado, iteraciones_dia
+    return (
+        resultado,
+        iteraciones_dia,
+        recaudacion_acumulada,
+        bebidas_acumuladas,
+        costo_bebidas_acumulado,
+    )

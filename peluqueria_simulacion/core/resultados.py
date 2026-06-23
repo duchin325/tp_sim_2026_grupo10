@@ -2,11 +2,11 @@ from typing import List
 from core.entidades import ResultadoDia
 
 
-def calcular_promedio_recaudacion(resultados: List[ResultadoDia]) -> float:
-    """Promedio de recaudación diaria: R̄ = (1/N) · Σ Rₖ"""
-    if not resultados:
+def calcular_promedio_recaudacion(total_recaudacion: float, n_dias: int) -> float:
+    """Promedio de recaudación diaria: R̄ = acumulado / N días simulados."""
+    if n_dias <= 0:
         return 0.0
-    return sum(r.recaudacion for r in resultados) / len(resultados)
+    return total_recaudacion / n_dias
 
 
 def calcular_probabilidad_mas_de_x(resultados: List[ResultadoDia], x: int) -> float:
@@ -37,10 +37,11 @@ def calcular_costo_total_bebidas(resultados: List[ResultadoDia]) -> float:
     return sum(r.costo_bebidas for r in resultados)
 
 
-def generar_resumen(resultados: List[ResultadoDia], x: int) -> dict:
+def generar_resumen(total_recaudacion: float, n_dias: int,
+                     resultados: List[ResultadoDia], x: int) -> dict:
     """Consolida todos los indicadores en un único diccionario de resultados."""
     return {
-        "promedio_recaudacion": calcular_promedio_recaudacion(resultados),
+        "promedio_recaudacion": calcular_promedio_recaudacion(total_recaudacion, n_dias),
         "probabilidad_mas_de_x": calcular_probabilidad_mas_de_x(resultados, x),
         "clientes_atendidos": calcular_total_clientes_atendidos(resultados),
         "bebidas_entregadas": calcular_total_bebidas(resultados),
