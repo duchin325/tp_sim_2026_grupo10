@@ -13,10 +13,14 @@ class Cliente:
     servidor_asignado: Optional[str] = None
     # Longitud de la cola del servidor asignado al momento de iniciar el corte (C en la ED)
     longitud_cola_al_inicio: int = 0
-    # Resultado de la integración RK4: duración del corte en minutos
+    # Resultado de la integración Euler: duración del corte en minutos
     demora_calculada: float = 0.0
     # True si esperó más de 30 minutos → recibe bebida gratis
     recibio_bebida: bool = False
+    # Pasos de la integración Euler para este corte [(t, D_antes, dD_dt, D_despues), ...]
+    pasos_euler: list = field(default_factory=list)
+    # Estado actual del cliente: "en_cola", "siendo_atendido", "atendido"
+    estado: str = "en_cola"
 
 
 @dataclass
@@ -26,6 +30,8 @@ class Servidor:
     ocupado: bool = False
     tiempo_libre: float = 0.0
     clientes_atendidos: int = 0
+    # Referencia al cliente actualmente siendo atendido (None si libre)
+    cliente_actual: Optional[Cliente] = None
 
 
 @dataclass
@@ -49,3 +55,5 @@ class ResultadoDia:
     max_cola_espera: int = 0
     # Lista de snapshots del estado de la simulación para la tabla de eventos
     filas_tabla: list = field(default_factory=list)
+    # Diccionario: nro_fila -> lista de clientes activos (copia) en ese instante
+    objetos_por_fila: dict = field(default_factory=dict)

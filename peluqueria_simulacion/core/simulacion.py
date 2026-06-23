@@ -1,5 +1,6 @@
 import heapq
 import random
+import copy
 from collections import deque
 from typing import List
 
@@ -14,6 +15,7 @@ TIEMPO_ESPERA_BEBIDA = 30      # minutos; si el cliente espera más, recibe bebi
 PRECIO_COLORISTA = 35_000
 PRECIO_PELUQUERO = 18_000
 COSTO_BEBIDA = 6_500
+MAX_ITERACIONES = 100_000
 
 # Nombre legible para cada tipo de servidor (usado en la tabla de eventos)
 _NOMBRE_TIPO = {
@@ -24,24 +26,58 @@ _NOMBRE_TIPO = {
 
 # Encabezados de la tabla de eventos
 _COLUMNAS_TABLA = [
-    "Día", "Evento", "Reloj", "Nro. Cliente", "RND Llegada", "T. Entre", "Próx. Llegada", "RND Tipo", "Tipo Asignado",
-    "Col. Estado", "Col. T.At", "Col. Fin", "Cola Col.",
-    "Pel.A Estado", "Pel.A T.At", "Pel.A Fin", "Cola Pel.A",
-    "Pel.B Estado", "Pel.B T.At", "Pel.B Fin", "Cola Pel.B",
-    "Acum. Recaud.", "Acum. Refrig."
+    "Nro", "Día", "Evento", "Reloj (min)", "Reloj (HH:MM)",
+    "RND Llegada", "T. Entre Lleg.", "Próx. Llegada",
+    "RND Tipo", "Tipo Asignado",
+    "Col. Estado", "Col. Cola", "Col. Fin At.",
+    "PA Estado", "PA Cola", "PA Fin At.",
+    "PB Estado", "PB Cola", "PB Fin At.",
+    "Próx. Eventos",
+    "Acum. Recaud.", "Acum. Bebidas", "Acum. Costo Beb.",
+    "Clientes Atend.", "Máx Cola Total",
 ]
 
 
-def simular(dias: int, x: int) -> dict:
+def simular(n_dias: int, x_cola: int, h_euler: float = 1.0) -> dict:
+    """
+    Ejecuta la simulación de N días de la peluquería.
+
+    Parámetros:
+        n_dias   -- cantidad de días a simular
+        x_cola   -- umbral para calcular P(cola > x_cola)
+        h_euler  -- paso de integración Euler (default 1.0)
+
+    Retorna:
+        Diccionario con resultados estadísticos, filas de la tabla,
+        y objetos temporales por fila.
+    """
     resultados: List[ResultadoDia] = []
     todas_las_filas: list = []
+    todos_los_objetos: dict = {}  # nro_fila_global -> lista de clientes activos
+    nro_fila_global = 0
+    iteraciones_totales = 0
 
-    for numero_dia in range(1, dias + 1):
-        resultado = _simular_dia(numero_dia)
+    for numero_dia in range(1, n_dias + 1):
+        resultado, iteraciones_dia = _simular_dia(
+            numero_dia, h_euler, nro_fila_global, iteraciones_totales
+        )
         resultados.append(resultado)
-        todas_las_filas.extend(resultado.filas_tabla)
 
-    resumen = generar_resumen(resultados, x)
+        # Re-numerar filas globalmente y consolidar objetos temporales
+        for fila in resultado.filas_tabla:
+            todas_las_filas.append(fila)
+
+        for nro_local, clientes in resultado.objetos_por_fila.items():
+            todos_los_objetos[nro_local] = clientes
+
+        nro_fila_global += len(resultado.filas_tabla)
+        iteraciones_totales += iteraciones_dia
+
+        # Cap de 100K iteraciones totales
+        if iteraciones_totales >= MAX_ITERACIONES:
+            break
+
+    resumen = generar_resumen(resultados, x_cola)
 
     filas_tabla = [_COLUMNAS_TABLA] + todas_las_filas
 
@@ -52,6 +88,9 @@ def simular(dias: int, x: int) -> dict:
         "bebidas_entregadas": resumen["bebidas_entregadas"],
         "costo_total_bebidas": resumen["costo_total_bebidas"],
         "filas_tabla": filas_tabla,
+        "objetos_por_fila": todos_los_objetos,
+        "iteraciones_totales": iteraciones_totales,
+        "dias_simulados": len(resultados),
     }
 
 
@@ -65,15 +104,67 @@ def _seleccionar_tipo_con_rnd(rnd: float) -> str:
         return "peluquero_b"
 
 
-def _generar_snapshot(dia, tipo_evento, reloj, nro_cliente, rnd_llegada, t_entre, prox_llegada,
-                      rnd_tipo, tipo_asignado, servidores, colas, t_atencion_servidores, fin_atencion_servidores,
-                      acum_recaud, acum_refrig):
+def _formato_hhmm(minutos: float) -> str:
+    """Convierte minutos a formato HH:MM."""
+    h = int(minutos // 60)
+    m = int(minutos % 60)
+    return f"{h:02d}:{m:02d}"
+
+
+def _formato_proximos_eventos(eventos_heap: list) -> str:
+    """Genera un string resumen de los próximos eventos programados."""
+    if not eventos_heap:
+        return "-"
+    partes = []
+    # Copiar y ordenar sin alterar el heap
+    eventos_ordenados = sorted(eventos_heap, key=lambda e: e.tiempo)
+    for ev in eventos_ordenados[:5]:  # Mostrar máximo 5 próximos
+        nombre = ev.tipo.replace("fin_atencion_", "Fin ")
+        nombre = nombre.replace("colorista", "Col.").replace("peluquero_a", "PA").replace("peluquero_b", "PB")
+        nombre = nombre.replace("llegada", "Lleg.")
+        partes.append(f"{nombre}:{ev.tiempo:.1f}")
+    return " | ".join(partes)
+
+
+def _capturar_objetos_temporales(servidores: dict, colas: dict, reloj: float) -> list:
+    """
+    Captura una copia de todos los clientes activos en el sistema
+    (siendo atendidos + en cola) en el instante actual.
+    """
+    clientes_activos = []
+
+    for tipo in ["colorista", "peluquero_a", "peluquero_b"]:
+        servidor = servidores[tipo]
+        # Cliente siendo atendido
+        if servidor.ocupado and servidor.cliente_actual is not None:
+            c = copy.copy(servidor.cliente_actual)
+            c.estado = "siendo_atendido"
+            clientes_activos.append(c)
+
+        # Clientes en cola
+        for cliente_cola in colas[tipo]:
+            c = copy.copy(cliente_cola)
+            c.estado = "en_cola"
+            c.tiempo_espera = reloj - c.tiempo_llegada
+            clientes_activos.append(c)
+
+    return clientes_activos
+
+
+def _generar_snapshot(nro_fila, dia, tipo_evento, reloj,
+                      nro_cliente, rnd_llegada, t_entre, prox_llegada,
+                      rnd_tipo, tipo_asignado,
+                      servidores, colas, fin_atencion,
+                      eventos_heap,
+                      acum_recaud, acum_bebidas, acum_costo_beb,
+                      clientes_atendidos, max_cola_total):
     """Genera una fila de la tabla con el estado actual de la simulación."""
     fila = [
+        str(nro_fila),
         str(dia),
         tipo_evento,
         f"{reloj:.2f}",
-        str(nro_cliente) if nro_cliente else "-",
+        _formato_hhmm(reloj),
         f"{rnd_llegada:.4f}" if rnd_llegada is not None else "-",
         f"{t_entre:.2f}" if t_entre is not None else "-",
         f"{prox_llegada:.2f}" if prox_llegada is not None else "-",
@@ -84,16 +175,33 @@ def _generar_snapshot(dia, tipo_evento, reloj, nro_cliente, rnd_llegada, t_entre
     for tipo in ["colorista", "peluquero_a", "peluquero_b"]:
         s = servidores[tipo]
         estado = "Ocupado" if s.ocupado else "Libre"
-        t_at = f"{t_atencion_servidores[tipo]:.2f}" if s.ocupado else "-"
-        fin = f"{fin_atencion_servidores[tipo]:.2f}" if s.ocupado else "-"
         cola_len = str(len(colas[tipo]))
-        fila.extend([estado, t_at, fin, cola_len])
+        fin = f"{fin_atencion[tipo]:.2f}" if s.ocupado else "-"
+        fila.extend([estado, cola_len, fin])
 
-    fila.extend([f"${acum_recaud:,.2f}", f"${acum_refrig:,.2f}"])
+    # Próximos eventos programados
+    fila.append(_formato_proximos_eventos(eventos_heap))
+
+    # Variables auxiliares
+    fila.extend([
+        f"${acum_recaud:,.2f}",
+        str(acum_bebidas),
+        f"${acum_costo_beb:,.2f}",
+        str(clientes_atendidos),
+        str(max_cola_total),
+    ])
+
     return fila
 
 
-def _simular_dia(numero_dia: int) -> ResultadoDia:
+def _simular_dia(numero_dia: int, h_euler: float,
+                 nro_fila_offset: int, iteraciones_previas: int) -> tuple:
+    """
+    Simula un día completo de la peluquería.
+
+    Retorna:
+        (ResultadoDia, iteraciones_dia)
+    """
     resultado = ResultadoDia(numero_dia=numero_dia)
 
     servidores = {
@@ -114,12 +222,6 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
         "peluquero_b": 0.0,
     }
 
-    tiempo_atencion = {
-        "colorista": 0.0,
-        "peluquero_a": 0.0,
-        "peluquero_b": 0.0,
-    }
-
     reloj = 0.0
     recaudacion = 0.0
     bebidas = 0
@@ -127,6 +229,8 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
     numero_cliente = 0
     clientes_atendidos = 0
     max_total_en_espera = 0
+    nro_fila_local = 0
+    iteraciones_dia = 0
 
     eventos: list = []
 
@@ -135,18 +239,32 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
     tiempo_entre = LLEGADA_MIN + (LLEGADA_MAX - LLEGADA_MIN) * rnd_llegada
     prox_llegada = tiempo_entre
 
+    nro_fila_actual = nro_fila_offset + nro_fila_local
     resultado.filas_tabla.append(
         _generar_snapshot(
-            numero_dia, "Inicial", 0.0, None, rnd_llegada, tiempo_entre, prox_llegada,
-            None, None, servidores, colas, tiempo_atencion, fin_atencion, recaudacion, costo_bebidas
+            nro_fila_actual, numero_dia, "Inicialización", 0.0,
+            None, rnd_llegada, tiempo_entre, prox_llegada,
+            None, None, servidores, colas, fin_atencion,
+            [],  # sin eventos aún en el heap
+            recaudacion, bebidas, costo_bebidas,
+            clientes_atendidos, max_total_en_espera
         )
     )
+    resultado.objetos_por_fila[nro_fila_actual] = _capturar_objetos_temporales(
+        servidores, colas, 0.0
+    )
+    nro_fila_local += 1
 
     heapq.heappush(eventos, Evento(tiempo=prox_llegada, tipo="llegada"))
 
     while eventos:
+        # Cap de iteraciones
+        if (iteraciones_previas + iteraciones_dia) >= MAX_ITERACIONES:
+            break
+
         evento = heapq.heappop(eventos)
         reloj = evento.tiempo
+        iteraciones_dia += 1
 
         if evento.tipo == "llegada":
             if reloj >= DURACION_RECEPCION_MIN:
@@ -160,6 +278,7 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
                 numero=numero_cliente,
                 tipo=tipo_cliente,
                 tiempo_llegada=reloj,
+                estado="en_cola",
             )
 
             servidor = servidores[tipo_cliente]
@@ -167,12 +286,18 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
 
             if not servidor.ocupado:
                 servidor.ocupado = True
+                servidor.cliente_actual = cliente
                 cliente.tiempo_inicio_atencion = reloj
+                cliente.estado = "siendo_atendido"
                 cliente.longitud_cola_al_inicio = len(cola)
-                demora = calcular_demora_corte(tipo_cliente, len(cola))
+
+                demora, pasos = calcular_demora_corte(
+                    tipo_cliente, len(cola), h=h_euler, con_detalle=True
+                )
                 cliente.demora_calculada = demora
+                cliente.pasos_euler = pasos
+
                 fin = reloj + demora
-                tiempo_atencion[tipo_cliente] = demora
                 fin_atencion[tipo_cliente] = fin
                 heapq.heappush(eventos, Evento(
                     tiempo=fin,
@@ -186,19 +311,29 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
             total_en_espera = sum(len(c) for c in colas.values())
             max_total_en_espera = max(max_total_en_espera, total_en_espera)
 
-            rnd_llegada_display = random.random()
-            t_entre = LLEGADA_MIN + (LLEGADA_MAX - LLEGADA_MIN) * rnd_llegada_display
+            # Generar próxima llegada
+            rnd_llegada_sig = random.random()
+            t_entre = LLEGADA_MIN + (LLEGADA_MAX - LLEGADA_MIN) * rnd_llegada_sig
             prox_llegada = reloj + t_entre
 
             if prox_llegada < DURACION_RECEPCION_MIN:
                 heapq.heappush(eventos, Evento(tiempo=prox_llegada, tipo="llegada"))
 
+            nro_fila_actual = nro_fila_offset + nro_fila_local
             resultado.filas_tabla.append(
                 _generar_snapshot(
-                    numero_dia, "Llegada Cliente", reloj, numero_cliente, rnd_llegada_display, t_entre, prox_llegada,
-                    rnd_tipo, tipo_cliente, servidores, colas, tiempo_atencion, fin_atencion, recaudacion, costo_bebidas
+                    nro_fila_actual, numero_dia, "Llegada Cliente", reloj,
+                    numero_cliente, rnd_llegada_sig, t_entre, prox_llegada,
+                    rnd_tipo, tipo_cliente, servidores, colas, fin_atencion,
+                    eventos,
+                    recaudacion, bebidas, costo_bebidas,
+                    clientes_atendidos, max_total_en_espera
                 )
             )
+            resultado.objetos_por_fila[nro_fila_actual] = _capturar_objetos_temporales(
+                servidores, colas, reloj
+            )
+            nro_fila_local += 1
 
         elif evento.tipo.startswith("fin_atencion_"):
             tipo_servidor = evento.tipo.replace("fin_atencion_", "")
@@ -207,6 +342,7 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
             cola = colas[tipo_servidor]
 
             cliente.tiempo_fin_atencion = reloj
+            cliente.estado = "atendido"
             cliente.tiempo_espera = cliente.tiempo_inicio_atencion - cliente.tiempo_llegada
 
             if cliente.tiempo_espera > TIEMPO_ESPERA_BEBIDA:
@@ -225,12 +361,18 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
             if cola:
                 next_cliente = cola.popleft()
                 next_cliente.tiempo_inicio_atencion = reloj
+                next_cliente.estado = "siendo_atendido"
                 next_cliente.longitud_cola_al_inicio = len(cola)
-                demora = calcular_demora_corte(tipo_servidor, len(cola))
+
+                demora, pasos = calcular_demora_corte(
+                    tipo_servidor, len(cola), h=h_euler, con_detalle=True
+                )
                 next_cliente.demora_calculada = demora
+                next_cliente.pasos_euler = pasos
+
                 fin = reloj + demora
-                tiempo_atencion[tipo_servidor] = demora
                 fin_atencion[tipo_servidor] = fin
+                servidor.cliente_actual = next_cliente
                 heapq.heappush(eventos, Evento(
                     tiempo=fin,
                     tipo=f"fin_atencion_{tipo_servidor}",
@@ -239,24 +381,33 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
                 ))
             else:
                 servidor.ocupado = False
-                tiempo_atencion[tipo_servidor] = 0.0
+                servidor.cliente_actual = None
                 fin_atencion[tipo_servidor] = 0.0
 
             total_en_espera = sum(len(c) for c in colas.values())
             max_total_en_espera = max(max_total_en_espera, total_en_espera)
 
             nombre = _NOMBRE_TIPO.get(tipo_servidor, tipo_servidor)
+            nro_fila_actual = nro_fila_offset + nro_fila_local
             resultado.filas_tabla.append(
                 _generar_snapshot(
-                    numero_dia, f"Fin At. {nombre}", reloj, cliente.numero, None, None, None,
-                    None, None, servidores, colas, tiempo_atencion, fin_atencion, recaudacion, costo_bebidas
+                    nro_fila_actual, numero_dia, f"Fin At. {nombre}", reloj,
+                    cliente.numero, None, None, None,
+                    None, None, servidores, colas, fin_atencion,
+                    eventos,
+                    recaudacion, bebidas, costo_bebidas,
+                    clientes_atendidos, max_total_en_espera
                 )
             )
+            resultado.objetos_por_fila[nro_fila_actual] = _capturar_objetos_temporales(
+                servidores, colas, reloj
+            )
+            nro_fila_local += 1
 
-    resultado.recaudacion = recaudacion
+    resultado.recaudacion = recaudacion - costo_bebidas  # Recaudación neta (ingresos - costo refrigerios)
     resultado.clientes_atendidos = clientes_atendidos
     resultado.bebidas_entregadas = bebidas
     resultado.costo_bebidas = costo_bebidas
     resultado.max_cola_espera = max_total_en_espera
 
-    return resultado
+    return resultado, iteraciones_dia

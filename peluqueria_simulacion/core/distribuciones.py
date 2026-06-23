@@ -29,24 +29,3 @@ def seleccionar_tipo_cliente() -> str:
         return "peluquero_a"
     else:
         return "peluquero_b"
-
-
-# --------------------------------------------------------------------
-# Funciones eliminadas del enunciado original — conservadas como
-# referencia histórica pero NO deben usarse en la simulación real.
-# El tiempo de atención ahora se calcula con Runge-Kutta (ver runge_kutta.py).
-# --------------------------------------------------------------------
-
-def _generar_tiempo_colorista_OBSOLETA() -> float:  # noqa: N802
-    # OBSOLETA — reemplazada por calcular_demora_corte("colorista", C)
-    raise NotImplementedError("Usar core.runge_kutta.calcular_demora_corte()")
-
-
-def _generar_tiempo_peluquero_a_OBSOLETA() -> float:  # noqa: N802
-    # OBSOLETA — reemplazada por calcular_demora_corte("peluquero_a", C)
-    raise NotImplementedError("Usar core.runge_kutta.calcular_demora_corte()")
-
-
-def _generar_tiempo_peluquero_b_OBSOLETA() -> float:  # noqa: N802
-    # OBSOLETA — reemplazada por calcular_demora_corte("peluquero_b", C)
-    raise NotImplementedError("Usar core.runge_kutta.calcular_demora_corte()")

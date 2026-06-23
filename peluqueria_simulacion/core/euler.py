@@ -13,7 +13,7 @@ Donde:
     t  — tiempo transcurrido desde el inicio del corte (en minutos)
     D  — demora acumulada (en minutos)
 
-La integración se realiza con paso h = 1 minuto.
+La integración se realiza con paso h parametrizable (default 1 minuto).
 """
 
 # Constantes de cada servidor
@@ -47,7 +47,7 @@ def euler(f, t0: float, y0: float, h: float, C: int, T: int) -> float:
         f      -- función derivada con firma f(t, y, C, T)
         t0     -- tiempo inicial
         y0     -- valor inicial de y (D₀ = 0 al comenzar el corte)
-        h      -- paso de integración (1 minuto)
+        h      -- paso de integración (parametrizable)
         C      -- longitud de cola al iniciar el corte
         T      -- constante del servidor
 
@@ -62,19 +62,45 @@ def euler(f, t0: float, y0: float, h: float, C: int, T: int) -> float:
     return t
 
 
-def calcular_demora_corte(tipo_servidor: str, longitud_cola_inicial: int) -> float:
+def euler_con_detalle(f, t0: float, y0: float, h: float, C: int, T: int):
+    """
+    Aplica el método de Euler igual que euler(), pero además retorna la tabla
+    paso a paso de la integración.
+
+    Retorna:
+        (t_final, lista_pasos)
+        donde lista_pasos es [(paso, t, D_antes, dD_dt, D_despues), ...]
+    """
+    t = t0
+    y = y0
+    pasos = []
+    paso_num = 0
+    while y < T:
+        dDdt = f(t, y, C, T)
+        y_nuevo = y + h * dDdt
+        pasos.append((paso_num, t, y, dDdt, y_nuevo))
+        y = y_nuevo
+        t = t + h
+        paso_num += 1
+    return t, pasos
+
+
+def calcular_demora_corte(tipo_servidor: str, longitud_cola_inicial: int, h: float = 1.0, con_detalle: bool = False):
     """
     Calcula el tiempo de atención de un corte integrando la ecuación diferencial
-    dD/dt = C + 0.2·T + t² mediante el método de Euler con h = 1 minuto.
+    dD/dt = C + 0.2·T + t² mediante el método de Euler con paso h parametrizable.
 
     La integración se detiene cuando D >= T, y se retorna el tiempo transcurrido (t).
 
     Parámetros:
         tipo_servidor          -- "colorista", "peluquero_a" o "peluquero_b"
         longitud_cola_inicial  -- cantidad de clientes en cola al iniciar el corte (C)
+        h                      -- paso de integración (default 1.0 minutos)
+        con_detalle            -- si True, retorna (demora, pasos); si False, solo demora
 
     Retorna:
-        Tiempo total de atención calculado por Euler (en minutos).
+        Si con_detalle=False: float con el tiempo total de atención.
+        Si con_detalle=True:  (float, list) con el tiempo y la tabla de pasos Euler.
 
     Raises:
         ValueError  si tipo_servidor no es reconocido.
@@ -87,8 +113,11 @@ def calcular_demora_corte(tipo_servidor: str, longitud_cola_inicial: int) -> flo
         raise ValueError(f"Tipo de servidor desconocido: '{tipo_servidor}'")
 
     C = longitud_cola_inicial
-    h = 1.0   # paso de integración: 1 minuto
     t0 = 0.0
     D0 = 0.0  # demora inicial: 0 al comenzar el corte
 
-    return euler(derivada_demora, t0, D0, h, C, T)
+    if con_detalle:
+        t_final, pasos = euler_con_detalle(derivada_demora, t0, D0, h, C, T)
+        return t_final, pasos
+    else:
+        return euler(derivada_demora, t0, D0, h, C, T)
