@@ -1,4 +1,6 @@
-def validar_entero_positivo(valor: str, nombre_campo: str) -> tuple[bool, str]:
+from typing import Tuple
+
+def validar_entero_positivo(valor: str, nombre_campo: str) -> Tuple[bool, str]:
     """
     Verifica que `valor` sea un entero mayor a 0.
     Retorna (True, "") si es válido, o (False, mensaje_error) si no lo es.
@@ -12,7 +14,7 @@ def validar_entero_positivo(valor: str, nombre_campo: str) -> tuple[bool, str]:
     return True, ""
 
 
-def validar_entero_no_negativo(valor: str, nombre_campo: str) -> tuple[bool, str]:
+def validar_entero_no_negativo(valor: str, nombre_campo: str) -> Tuple[bool, str]:
     """
     Verifica que `valor` sea un entero >= 0.
     Retorna (True, "") si es válido, o (False, mensaje_error) si no lo es.
@@ -26,7 +28,7 @@ def validar_entero_no_negativo(valor: str, nombre_campo: str) -> tuple[bool, str
     return True, ""
 
 
-def validar_float_positivo(valor: str, nombre_campo: str) -> tuple[bool, str]:
+def validar_float_positivo(valor: str, nombre_campo: str) -> Tuple[bool, str]:
     """
     Verifica que `valor` sea un float mayor a 0.
     Retorna (True, "") si es válido, o (False, mensaje_error) si no lo es.
@@ -41,7 +43,7 @@ def validar_float_positivo(valor: str, nombre_campo: str) -> tuple[bool, str]:
 
 
 def validar_inputs_simulacion(n_dias: str, x_cola: str, h_euler: str,
-                               hora_j: str, iter_i: str) -> tuple[bool, str]:
+                               hora_j: str, iter_i: str) -> Tuple[bool, str]:
     """
     Valida los campos de entrada de la simulación.
     Retorna (True, "") si son válidos, o (False, primer_error) si alguno falla.

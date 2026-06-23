@@ -307,6 +307,13 @@ def _simular_dia(numero_dia: int, h_euler: float,
                 ))
             else:
                 cola.append(cliente)
+                # Programar evento de comienzo de refrigerio (30 minutos después de llegar)
+                tiempo_comienzo_refrig = reloj + TIEMPO_ESPERA_BEBIDA
+                heapq.heappush(eventos, Evento(
+                    tiempo=tiempo_comienzo_refrig,
+                    tipo=f"comienzo_refrigerio_{tipo_cliente}",
+                    cliente=cliente,
+                ))
 
             total_en_espera = sum(len(c) for c in colas.values())
             max_total_en_espera = max(max_total_en_espera, total_en_espera)
@@ -345,7 +352,8 @@ def _simular_dia(numero_dia: int, h_euler: float,
             cliente.estado = "atendido"
             cliente.tiempo_espera = cliente.tiempo_inicio_atencion - cliente.tiempo_llegada
 
-            if cliente.tiempo_espera > TIEMPO_ESPERA_BEBIDA:
+            # Si el cliente fue marcado como elegible para refrigerio, o esperó más de 30 min
+            if cliente.elegible_refrigerio or cliente.tiempo_espera > TIEMPO_ESPERA_BEBIDA:
                 cliente.recibio_bebida = True
                 bebidas += 1
                 costo_bebidas += COSTO_BEBIDA
@@ -359,13 +367,17 @@ def _simular_dia(numero_dia: int, h_euler: float,
             clientes_atendidos += 1
 
             if cola:
+                # Sacar el siguiente cliente de la cola
                 next_cliente = cola.popleft()
+                # La longitud de cola es lo que queda esperando
+                longitud_cola = len(cola)
+                
                 next_cliente.tiempo_inicio_atencion = reloj
                 next_cliente.estado = "siendo_atendido"
-                next_cliente.longitud_cola_al_inicio = len(cola)
+                next_cliente.longitud_cola_al_inicio = longitud_cola
 
                 demora, pasos = calcular_demora_corte(
-                    tipo_servidor, len(cola), h=h_euler, con_detalle=True
+                    tipo_servidor, longitud_cola, h=h_euler, con_detalle=True
                 )
                 next_cliente.demora_calculada = demora
                 next_cliente.pasos_euler = pasos
@@ -403,6 +415,33 @@ def _simular_dia(numero_dia: int, h_euler: float,
                 servidores, colas, reloj
             )
             nro_fila_local += 1
+
+        elif evento.tipo.startswith("comienzo_refrigerio_"):
+            # Evento cuando un cliente alcanza 30 minutos de espera en la cola
+            tipo_servidor = evento.tipo.replace("comienzo_refrigerio_", "")
+            cliente = evento.cliente
+            cola = colas[tipo_servidor]
+
+            # Verificar si el cliente aún está en la cola (no ha sido atendido)
+            if cliente in cola and not cliente.elegible_refrigerio:
+                cliente.elegible_refrigerio = True
+                cliente.tiempo_comienzo_refrigerio = reloj
+
+                nro_fila_actual = nro_fila_offset + nro_fila_local
+                resultado.filas_tabla.append(
+                    _generar_snapshot(
+                        nro_fila_actual, numero_dia, f"Comienzo Refrig {cliente.numero}", reloj,
+                        cliente.numero, None, None, None,
+                        None, None, servidores, colas, fin_atencion,
+                        eventos,
+                        recaudacion, bebidas, costo_bebidas,
+                        clientes_atendidos, max_total_en_espera
+                    )
+                )
+                resultado.objetos_por_fila[nro_fila_actual] = _capturar_objetos_temporales(
+                    servidores, colas, reloj
+                )
+                nro_fila_local += 1
 
     resultado.recaudacion = recaudacion - costo_bebidas  # Recaudación neta (ingresos - costo refrigerios)
     resultado.clientes_atendidos = clientes_atendidos

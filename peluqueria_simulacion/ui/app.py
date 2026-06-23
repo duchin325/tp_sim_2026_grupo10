@@ -542,6 +542,8 @@ class AplicacionPeluqueria:
         if cliente.estado == "en_cola":
             espera = cliente.tiempo_espera
             atributos.append(f"Esperando: {espera:.2f} min")
+            hora_ini_refrig = cliente.tiempo_llegada + 30  # 30 minutos después de llegar
+            atributos.append(f"Hora Ini. Refrig: {hora_ini_refrig:.2f} min")
         elif cliente.estado == "siendo_atendido":
             atributos.append(f"Inicio at.: {cliente.tiempo_inicio_atencion:.2f} min")
             if cliente.demora_calculada > 0:

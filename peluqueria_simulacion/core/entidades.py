@@ -17,6 +17,10 @@ class Cliente:
     demora_calculada: float = 0.0
     # True si esperó más de 30 minutos → recibe bebida gratis
     recibio_bebida: bool = False
+    # True cuando el cliente alcanza 30 minutos de espera (elegible para refrigerio)
+    elegible_refrigerio: bool = False
+    # Tiempo en que se marcó como elegible para refrigerio
+    tiempo_comienzo_refrigerio: float = 0.0
     # Pasos de la integración Euler para este corte [(t, D_antes, dD_dt, D_despues), ...]
     pasos_euler: list = field(default_factory=list)
     # Estado actual del cliente: "en_cola", "siendo_atendido", "atendido"
