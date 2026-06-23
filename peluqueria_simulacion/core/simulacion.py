@@ -14,6 +14,7 @@ TIEMPO_ESPERA_BEBIDA = 30      # minutos; si el cliente espera más, recibe bebi
 PRECIO_COLORISTA = 35_000
 PRECIO_PELUQUERO = 18_000
 COSTO_BEBIDA = 6_500
+MAX_ITERACIONES = 100000
 
 # Nombre legible para cada tipo de servidor (usado en la tabla de eventos)
 _NOMBRE_TIPO = {
@@ -24,7 +25,7 @@ _NOMBRE_TIPO = {
 
 # Encabezados de la tabla de eventos
 _COLUMNAS_TABLA = [
-    "Día", "Evento", "Reloj", "Nro. Cliente", "RND Llegada", "T. Entre", "Próx. Llegada", "RND Tipo", "Tipo Asignado",
+    "Iteración", "Día", "Evento", "Reloj", "Nro. Cliente", "RND Llegada", "T. Entre", "Próx. Llegada", "RND Tipo", "Tipo Asignado",
     "Col. Estado", "Col. T.At", "Col. Fin", "Cola Col.",
     "Pel.A Estado", "Pel.A T.At", "Pel.A Fin", "Cola Pel.A",
     "Pel.B Estado", "Pel.B T.At", "Pel.B Fin", "Cola Pel.B", "Cola Total",
@@ -36,9 +37,10 @@ _COLUMNAS_TABLA = [
 def simular(dias: int, x: int) -> dict:
     resultados: List[ResultadoDia] = []
     todas_las_filas: list = []
+    iteracion_global = 0  # Contador global de iteraciones a través de todos los días
 
     for numero_dia in range(1, dias + 1):
-        resultado = _simular_dia(numero_dia)
+        resultado, iteracion_global = _simular_dia(numero_dia, iteracion_global)
         resultados.append(resultado)
         todas_las_filas.extend(resultado.filas_tabla)
 
@@ -97,11 +99,12 @@ def _estado_cliente(cliente):
 
     return f"SA({sufijo})"
 
-def _generar_snapshot(dia, tipo_evento, reloj, nro_cliente, rnd_llegada, t_entre, prox_llegada,
+def _generar_snapshot(iteracion, dia, tipo_evento, reloj, nro_cliente, rnd_llegada, t_entre, prox_llegada,
                       rnd_tipo, tipo_asignado, servidores, colas, t_atencion_servidores, fin_atencion_servidores, cola_total, cola_maxima, hora_refrigerio,
                       acum_recaud, acum_refrig, clientes_dia ):
     """Genera una fila de la tabla con el estado actual de la simulación."""
     fila = [
+        str(iteracion),
         str(dia),
         tipo_evento,
         f"{reloj:.2f}",
@@ -142,7 +145,7 @@ def _generar_snapshot(dia, tipo_evento, reloj, nro_cliente, rnd_llegada, t_entre
 
             "SI" if cliente.recibio_bebida else "NO",
 
-            str(COSTO_BEBIDA)
+            str(f"${COSTO_BEBIDA:,.2f}")
             if cliente.recibio_bebida
             else "0"
         ])
@@ -150,7 +153,7 @@ def _generar_snapshot(dia, tipo_evento, reloj, nro_cliente, rnd_llegada, t_entre
     return fila
 
 
-def _simular_dia(numero_dia: int) -> ResultadoDia:
+def _simular_dia(numero_dia: int, iteracion_global: int) -> tuple[ResultadoDia, int]:
     resultado = ResultadoDia(numero_dia=numero_dia)
     clientes_dia = []
 
@@ -179,6 +182,7 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
     }
 
     reloj = 0.0
+    iteracion = iteracion_global
     recaudacion = 0.0
     bebidas = 0
     costo_bebidas = 0.0
@@ -195,18 +199,21 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
     tiempo_entre = LLEGADA_MIN + (LLEGADA_MAX - LLEGADA_MIN) * rnd_llegada
     prox_llegada = tiempo_entre
 
+    iteracion += 1
+
     resultado.filas_tabla.append(
         _generar_snapshot(
-            numero_dia, "Inicial", 0.0, None, rnd_llegada, tiempo_entre, prox_llegada,
+            iteracion, numero_dia, "Inicial", 0.0, None, rnd_llegada, tiempo_entre, prox_llegada,
             None, None, servidores, colas, tiempo_atencion, fin_atencion,  total_en_espera, max_total_en_espera, hora_refrigerio ,recaudacion, costo_bebidas, clientes_dia
         )
     )
 
     heapq.heappush(eventos, Evento(tiempo=prox_llegada, tipo="llegada"))
 
-    while eventos:
+    while eventos and iteracion < MAX_ITERACIONES:
         evento = heapq.heappop(eventos)
         reloj = evento.tiempo
+        iteracion += 1
 
         if evento.tipo == "llegada":
             if reloj >= DURACION_RECEPCION_MIN:
@@ -274,7 +281,7 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
 
             resultado.filas_tabla.append(
                 _generar_snapshot(
-                    numero_dia, "Llegada Cliente", reloj, numero_cliente, rnd_llegada_display, t_entre, prox_llegada,
+                    iteracion, numero_dia, "Llegada Cliente", reloj, numero_cliente, rnd_llegada_display, t_entre, prox_llegada,
                     rnd_tipo, tipo_cliente, servidores, colas, tiempo_atencion, fin_atencion,  total_en_espera, max_total_en_espera, cliente.hora_refrigerio, recaudacion, costo_bebidas, clientes_dia
                 )
             )
@@ -305,6 +312,7 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
 
             resultado.filas_tabla.append(
                 _generar_snapshot(
+                    iteracion, 
                     numero_dia,
                     f"Refrigerio Cliente {cliente.numero}",
                     reloj,
@@ -372,7 +380,7 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
             nombre = _NOMBRE_TIPO.get(tipo_servidor, tipo_servidor)
             resultado.filas_tabla.append(
                 _generar_snapshot(
-                    numero_dia, f"Fin At. {nombre}", reloj, cliente.numero, None, None, None,
+                    iteracion, numero_dia, f"Fin At. {nombre}", reloj, cliente.numero, None, None, None,
                     None, None, servidores, colas, tiempo_atencion, fin_atencion, total_en_espera, max_total_en_espera, cliente.hora_refrigerio,recaudacion, costo_bebidas, clientes_dia
                 )
             )
@@ -384,4 +392,4 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
     resultado.max_cola_espera = max_total_en_espera
     resultado.max_clientes = numero_cliente
 
-    return resultado
+    return resultado, iteracion

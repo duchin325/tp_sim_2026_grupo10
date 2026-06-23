@@ -101,6 +101,18 @@ class AplicacionPeluqueria:
         self.entrada_x.insert(0, "3")
         self.entrada_x.grid(row=0, column=3, sticky=tk.W, padx=5)
 
+        tk.Label(frame, text="Hora desde (j):").grid(row=1, column=0, sticky=tk.W, padx=5)
+
+        self.entrada_hora_desde = tk.Entry(frame, width=12)
+        self.entrada_hora_desde.insert(0, "0")
+        self.entrada_hora_desde.grid(row=1, column=1, sticky=tk.W, padx=5)
+
+        tk.Label(frame, text="Iteraciones a mostrar (i):").grid(row=1, column=2, sticky=tk.W, padx=5)
+
+        self.entrada_iteraciones = tk.Entry(frame, width=12)
+        self.entrada_iteraciones.insert(0, "500")
+        self.entrada_iteraciones.grid(row=1, column=3, sticky=tk.W, padx=5)
+
         # Filas por página
         tk.Label(frame, text="Filas por página:").grid(row=0, column=4, sticky=tk.W, padx=5)
         self.entrada_filas_por_pagina = tk.Entry(frame, width=12)
@@ -223,6 +235,8 @@ class AplicacionPeluqueria:
         dias_str = self.entrada_dias.get().strip()
         x_str = self.entrada_x.get().strip()
         filas_pp_str = self.entrada_filas_por_pagina.get().strip()
+        hora_desde_str = self.entrada_hora_desde.get().strip()
+        iteraciones_str = self.entrada_iteraciones.get().strip()
 
         valido, mensaje_error = validar_inputs_simulacion(dias_str, x_str)
         if not valido:
@@ -236,6 +250,8 @@ class AplicacionPeluqueria:
 
         dias = int(dias_str)
         x = int(x_str)
+        hora_desde = float(hora_desde_str)
+        iteraciones_mostrar = int(iteraciones_str)
         self.filas_por_pagina = int(filas_pp_str)
 
         resultados = simular(dias, x)
@@ -246,6 +262,16 @@ class AplicacionPeluqueria:
         if filas_completas:
             self.encabezados = filas_completas[0]
             self.filas_simuladas = filas_completas[1:]
+            filas_filtradas = []
+
+            for fila in self.filas_simuladas:
+
+                reloj = float(fila[3])
+
+                if reloj >= hora_desde:
+                    filas_filtradas.append(fila)
+
+            self.filas_simuladas = filas_filtradas
         else:
             self.encabezados = []
             self.filas_simuladas = []
