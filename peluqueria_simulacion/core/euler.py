@@ -57,12 +57,12 @@ def euler(f, t0: float, y0: float, h: float, C: int, T: int) -> float:
     t = t0
     y = y0
     while y < T:
-        y = y + h * f(t, y, C, T)
+        y = y + f(t, y, C, T)
         t = t + h
     return t
 
 
-def calcular_demora_corte(tipo_servidor: str, longitud_cola_inicial: int) -> float:
+def calcular_demora_corte(tipo_servidor: str, longitud_cola_inicial: int, h: float = 1.0 ) -> float:
     """
     Calcula el tiempo de atención de un corte integrando la ecuación diferencial
     dD/dt = C + 0.2·T + t² mediante el método de Euler con h = 1 minuto.
@@ -86,8 +86,7 @@ def calcular_demora_corte(tipo_servidor: str, longitud_cola_inicial: int) -> flo
     else:
         raise ValueError(f"Tipo de servidor desconocido: '{tipo_servidor}'")
 
-    C = longitud_cola_inicial
-    h = 1.0   # paso de integración: 1 minuto
+    C = longitud_cola_inicial   # paso de integración: 1 minuto
     t0 = 0.0
     D0 = 0.0  # demora inicial: 0 al comenzar el corte
 

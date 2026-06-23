@@ -34,13 +34,13 @@ _COLUMNAS_TABLA = [
 ]
 
 
-def simular(dias: int, x: int) -> dict:
+def simular(dias: int, x: int, h: float = 1.0) -> dict:
     resultados: List[ResultadoDia] = []
     todas_las_filas: list = []
     iteracion_global = 0  # Contador global de iteraciones a través de todos los días
 
     for numero_dia in range(1, dias + 1):
-        resultado, iteracion_global = _simular_dia(numero_dia, iteracion_global)
+        resultado, iteracion_global = _simular_dia(numero_dia, iteracion_global, h)
         resultados.append(resultado)
         todas_las_filas.extend(resultado.filas_tabla)
 
@@ -153,7 +153,7 @@ def _generar_snapshot(iteracion, dia, tipo_evento, reloj, nro_cliente, rnd_llega
     return fila
 
 
-def _simular_dia(numero_dia: int, iteracion_global: int) -> tuple[ResultadoDia, int]:
+def _simular_dia(numero_dia: int, iteracion_global: int, h: float = 1.0) -> tuple[ResultadoDia, int]:
     resultado = ResultadoDia(numero_dia=numero_dia)
     clientes_dia = []
 
@@ -239,7 +239,7 @@ def _simular_dia(numero_dia: int, iteracion_global: int) -> tuple[ResultadoDia, 
                 cliente.hora_refrigerio = 0.0
                 cliente.tiempo_inicio_atencion = reloj
                 cliente.longitud_cola_al_inicio = len(cola)
-                demora = calcular_demora_corte(tipo_cliente, len(cola))
+                demora = calcular_demora_corte(tipo_cliente, len(cola), h)
                 cliente.demora_calculada = demora
                 fin = reloj + demora
                 tiempo_atencion[tipo_cliente] = demora
@@ -358,7 +358,7 @@ def _simular_dia(numero_dia: int, iteracion_global: int) -> tuple[ResultadoDia, 
                 next_cliente.hora_refrigerio = 0.0
                 next_cliente.tiempo_inicio_atencion = reloj
                 next_cliente.longitud_cola_al_inicio = len(cola)
-                demora = calcular_demora_corte(tipo_servidor, len(cola))
+                demora = calcular_demora_corte(tipo_servidor, len(cola), h)
                 next_cliente.demora_calculada = demora
                 fin = reloj + demora
                 tiempo_atencion[tipo_servidor] = demora

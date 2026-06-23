@@ -113,6 +113,11 @@ class AplicacionPeluqueria:
         self.entrada_iteraciones.insert(0, "500")
         self.entrada_iteraciones.grid(row=1, column=3, sticky=tk.W, padx=5)
 
+        tk.Label(frame, text="Paso Euler (h):").grid(row=1, column=4, sticky=tk.W, padx=5)
+        self.entrada_h = tk.Entry(frame, width=12)
+        self.entrada_h.insert(0, "1.0")
+        self.entrada_h.grid(row=1, column=5, sticky=tk.W, padx=5)
+        
         # Filas por página
         tk.Label(frame, text="Filas por página:").grid(row=0, column=4, sticky=tk.W, padx=5)
         self.entrada_filas_por_pagina = tk.Entry(frame, width=12)
@@ -253,8 +258,17 @@ class AplicacionPeluqueria:
         hora_desde = float(hora_desde_str)
         iteraciones_mostrar = int(iteraciones_str)
         self.filas_por_pagina = int(filas_pp_str)
+        
+        h_str = self.entrada_h.get().strip()
+        try:
+            h = float(h_str)
+            if h <= 0:
+                raise ValueError
+        except ValueError:
+            messagebox.showerror("Error de validación", "El paso Euler (h) debe ser un número positivo.")
+            return
 
-        resultados = simular(dias, x)
+        resultados = simular(dias, x, h)
         self._actualizar_resultados(resultados, x)
 
         # Separar encabezados del resto y guardar todas las filas
