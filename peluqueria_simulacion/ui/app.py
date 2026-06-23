@@ -28,9 +28,10 @@ class AplicacionPeluqueria:
         self.h_euler_actual: float = 1.0
 
         self.ventana = tk.Tk()
+        self.ventana.geometry("1600x1000")
         self.ventana.title("Simulación Peluquería Look — TP5 Grupo 10")
         self.ventana.resizable(True, True)
-        self.ventana.minsize(1100, 800)
+        self.ventana.minsize(1400, 900)
         self._configurar_estilos()
         self._construir_ui()
 
@@ -215,7 +216,7 @@ class AplicacionPeluqueria:
             yscrollcommand=scroll_y.set,
             xscrollcommand=scroll_x.set,
             show="headings",
-            height=12,
+            height=4,
         )
         scroll_y.config(command=self.tabla.yview)
         scroll_x.config(command=self.tabla.xview)
