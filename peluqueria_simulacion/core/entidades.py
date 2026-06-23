@@ -19,6 +19,7 @@ class Cliente:
     recibio_bebida: bool = False
     hora_refrigerio: float = 0.0
     en_cola: bool = False
+    estado_tabla: str = ""
 
 @dataclass
 class Servidor:

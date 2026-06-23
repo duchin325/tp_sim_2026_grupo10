@@ -44,7 +44,21 @@ def simular(dias: int, x: int) -> dict:
 
     resumen = generar_resumen(resultados, x)
 
-    filas_tabla = [_COLUMNAS_TABLA] + todas_las_filas
+    max_clientes = max(r.max_clientes for r in resultados)
+
+    columnas_clientes = []
+
+    for i in range(1, max_clientes + 1):
+        columnas_clientes.extend([
+            f"Cliente {i} Estado",
+            f"Cliente {i} Hora Ref.",
+            f"Cliente {i} Refrigerio",
+            f"Cliente {i} Costo"
+        ])
+
+    filas_tabla = [
+        _COLUMNAS_TABLA + columnas_clientes
+    ] + todas_las_filas
 
     return {
         "promedio_recaudacion": resumen["promedio_recaudacion"],
@@ -65,10 +79,27 @@ def _seleccionar_tipo_con_rnd(rnd: float) -> str:
     else:
         return "peluquero_b"
 
+def _estado_cliente(cliente):
+
+    mapa = {
+        "colorista": "C",
+        "peluquero_a": "PA",
+        "peluquero_b": "PB"
+    }
+
+    sufijo = mapa[cliente.tipo]
+
+    if cliente.en_cola:
+        return f"EA({sufijo})"
+
+    if cliente.tiempo_fin_atencion > 0:
+        return "FA"
+
+    return f"SA({sufijo})"
 
 def _generar_snapshot(dia, tipo_evento, reloj, nro_cliente, rnd_llegada, t_entre, prox_llegada,
                       rnd_tipo, tipo_asignado, servidores, colas, t_atencion_servidores, fin_atencion_servidores, cola_total, cola_maxima, hora_refrigerio,
-                      acum_recaud, acum_refrig ):
+                      acum_recaud, acum_refrig, clientes_dia ):
     """Genera una fila de la tabla con el estado actual de la simulación."""
     fila = [
         str(dia),
@@ -100,11 +131,28 @@ def _generar_snapshot(dia, tipo_evento, reloj, nro_cliente, rnd_llegada, t_entre
         f"${acum_refrig:,.2f}"
     ])
 
+    for cliente in clientes_dia:
+
+        fila.extend([
+            _estado_cliente(cliente),
+
+            f"{cliente.hora_refrigerio:.2f}"
+            if cliente.hora_refrigerio > 0
+            else "",
+
+            "SI" if cliente.recibio_bebida else "NO",
+
+            str(COSTO_BEBIDA)
+            if cliente.recibio_bebida
+            else "0"
+        ])
+
     return fila
 
 
 def _simular_dia(numero_dia: int) -> ResultadoDia:
     resultado = ResultadoDia(numero_dia=numero_dia)
+    clientes_dia = []
 
     servidores = {
         "colorista": Servidor("Colorista", "colorista"),
@@ -150,7 +198,7 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
     resultado.filas_tabla.append(
         _generar_snapshot(
             numero_dia, "Inicial", 0.0, None, rnd_llegada, tiempo_entre, prox_llegada,
-            None, None, servidores, colas, tiempo_atencion, fin_atencion,  total_en_espera, max_total_en_espera, hora_refrigerio ,recaudacion, costo_bebidas
+            None, None, servidores, colas, tiempo_atencion, fin_atencion,  total_en_espera, max_total_en_espera, hora_refrigerio ,recaudacion, costo_bebidas, clientes_dia
         )
     )
 
@@ -173,20 +221,15 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
                 tipo=tipo_cliente,
                 tiempo_llegada=reloj,
             )
-            cliente.hora_refrigerio = reloj + TIEMPO_ESPERA_BEBIDA
-            heapq.heappush(
-                eventos,
-                Evento(
-                    tiempo=cliente.hora_refrigerio,
-                    tipo="refrigerio_cliente",
-                    cliente=cliente
-                )
-            )
+
+            clientes_dia.append(cliente)
+
             servidor = servidores[tipo_cliente]
             cola = colas[tipo_cliente]
 
             if not servidor.ocupado:
                 servidor.ocupado = True
+                cliente.hora_refrigerio = 0.0
                 cliente.tiempo_inicio_atencion = reloj
                 cliente.longitud_cola_al_inicio = len(cola)
                 demora = calcular_demora_corte(tipo_cliente, len(cola))
@@ -203,6 +246,17 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
             else:
                 cola.append(cliente)
                 cliente.en_cola = True
+
+                cliente.hora_refrigerio = reloj + TIEMPO_ESPERA_BEBIDA
+
+                heapq.heappush(
+                    eventos,
+                    Evento(
+                        tiempo=cliente.hora_refrigerio,
+                        tipo="refrigerio_cliente",
+                        cliente=cliente
+                    )
+                )
 
             total_en_espera = total_en_espera = (
                 len(colas["colorista"])
@@ -221,7 +275,7 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
             resultado.filas_tabla.append(
                 _generar_snapshot(
                     numero_dia, "Llegada Cliente", reloj, numero_cliente, rnd_llegada_display, t_entre, prox_llegada,
-                    rnd_tipo, tipo_cliente, servidores, colas, tiempo_atencion, fin_atencion,  total_en_espera, max_total_en_espera, cliente.hora_refrigerio, recaudacion, costo_bebidas
+                    rnd_tipo, tipo_cliente, servidores, colas, tiempo_atencion, fin_atencion,  total_en_espera, max_total_en_espera, cliente.hora_refrigerio, recaudacion, costo_bebidas, clientes_dia
                 )
             )
 
@@ -264,7 +318,8 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
                     max_total_en_espera,
                     cliente.hora_refrigerio,
                     recaudacion,
-                    costo_bebidas
+                    costo_bebidas,
+                    clientes_dia
                 )
             )
 
@@ -313,7 +368,7 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
             resultado.filas_tabla.append(
                 _generar_snapshot(
                     numero_dia, f"Fin At. {nombre}", reloj, cliente.numero, None, None, None,
-                    None, None, servidores, colas, tiempo_atencion, fin_atencion, total_en_espera, max_total_en_espera, cliente.hora_refrigerio,recaudacion, costo_bebidas
+                    None, None, servidores, colas, tiempo_atencion, fin_atencion, total_en_espera, max_total_en_espera, cliente.hora_refrigerio,recaudacion, costo_bebidas, clientes_dia
                 )
             )
 
@@ -322,5 +377,6 @@ def _simular_dia(numero_dia: int) -> ResultadoDia:
     resultado.bebidas_entregadas = bebidas
     resultado.costo_bebidas = costo_bebidas
     resultado.max_cola_espera = max_total_en_espera
+    resultado.max_clientes = numero_cliente
 
     return resultado
