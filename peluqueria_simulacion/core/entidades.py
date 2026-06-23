@@ -17,7 +17,8 @@ class Cliente:
     demora_calculada: float = 0.0
     # True si esperó más de 30 minutos → recibe bebida gratis
     recibio_bebida: bool = False
-
+    hora_refrigerio: float = 0.0
+    en_cola: bool = False
 
 @dataclass
 class Servidor:
@@ -31,7 +32,7 @@ class Servidor:
 @dataclass
 class Evento:
     tiempo: float
-    tipo: str            # "llegada", "fin_atencion_colorista", "fin_atencion_peluquero_a", "fin_atencion_peluquero_b"
+    tipo: str            # "llegada", "fin_atencion_colorista", "fin_atencion_peluquero_a", "fin_atencion_peluquero_b" "refrigerio_cliente"
     cliente: Optional[Cliente] = None
     servidor: Optional[Servidor] = None
 
