@@ -381,39 +381,10 @@ class AplicacionPeluqueria:
         ])
 
     def _on_seleccionar_fila(self, event):
-        """Actualiza los encabezados de grupo para mostrar el Nro de Cliente real."""
-        seleccion = self.tabla.selection()
-        if not seleccion:
-            # Restaurar a valores por defecto si no hay selección
-            self._actualizar_textos_grupo(None)
-            return
-            
-        item = seleccion[0]
-        valores = self.tabla.item(item, "values")
-        if not valores:
-            return
-            
-        try:
-            nro_evento = int(valores[0])
-        except ValueError:
-            return
-            
-        clientes_en_fila = self.objetos_por_fila.get(nro_evento, [])
-        self._actualizar_textos_grupo(clientes_en_fila)
-
+        pass
+    
     def _actualizar_textos_grupo(self, clientes_en_fila):
-        """Actualiza el texto de los recuadros de colores."""
-        if not hasattr(self, '_labels_grupo_refs'):
-            return
-            
-        for i, lbl in enumerate(self._labels_grupo_refs):
-            # Lógica anterior comentada por si se desea volver atrás:
-            # lbl.config(text=f"Cliente {i + 1}")
-            
-            if clientes_en_fila and i < len(clientes_en_fila):
-                lbl.config(text=f"Cliente {clientes_en_fila[i].numero}")
-            else:
-                lbl.config(text=f"Slot {i + 1} (Vacío)")
+        pass
 
     def _sincronizar_grupo_scroll(self):
         """Sincroniza la posición del canvas de grupo con la tabla."""
@@ -621,16 +592,7 @@ class AplicacionPeluqueria:
         self._construir_grupo_headers(columnas, grupos_clientes, anchos)
 
     def _construir_grupo_headers(self, columnas: list, grupos_clientes: list, anchos: dict):
-        """Construye la fila de encabezados de grupo (Cliente 1, Cliente 2, etc.)."""
-        import re
-
-        # Limpiar labels anteriores
-        for w in self.frame_grupo_labels.winfo_children():
-            w.destroy()
-
-        if not grupos_clientes:
-            self.frame_grupo_header.pack_forget()
-            return
+        return
 
         # Mostrar la barra de grupo
         self.frame_grupo_header.pack(fill=tk.X)
@@ -665,7 +627,7 @@ class AplicacionPeluqueria:
                 
                 lbl = tk.Label(
                     lbl_frame,
-                    text=f"{nro_cli}º Cliente", # Texto estático (fallback)
+                    text=f"Cliente {nro_cli}", # Texto estático (fallback)
                     bg=color, fg="white",
                     font=("Helvetica", 8, "bold"),
                 )
@@ -771,8 +733,11 @@ class AplicacionPeluqueria:
         # Separar encabezados del resto
         filas_completas = resultados.get("filas_tabla", [])
         if filas_completas:
-            self.encabezados = filas_completas[0]
-            todas_las_filas = filas_completas[1:]
+            encabezados_raw = filas_completas[0]
+            filas_raw = filas_completas[1:]
+            self.encabezados, todas_las_filas = self._agregar_columna_contador_dias_supera_x(
+                encabezados_raw, filas_raw, x_cola
+            )
         else:
             self.encabezados = []
             todas_las_filas = []
@@ -821,6 +786,48 @@ class AplicacionPeluqueria:
             text=f"P(cola > {x_cola} personas):"
         )
 
+    def _agregar_columna_contador_dias_supera_x(self, encabezados: list, filas: list, x_cola: int):
+        """Agrega una columna de contador por día para el umbral de cola X."""
+        if "Máx Cola Total" not in encabezados:
+            return encabezados, filas
+
+        encabezados_actualizados = list(encabezados)
+        max_cola_idx = encabezados.index("Máx Cola Total")
+        contador_col = f"Días cola > {x_cola}"
+        insert_idx = max_cola_idx + 1
+        encabezados_actualizados.insert(insert_idx, contador_col)
+
+        filas_actualizadas = []
+        dia_actual = None
+        dia_supero_umbral = False
+        contador_dias = 0
+
+        for fila in filas:
+            # Resetear por día
+            try:
+                dia = int(fila[1])
+            except (ValueError, TypeError):
+                dia = dia_actual
+
+            if dia != dia_actual:
+                dia_actual = dia
+                dia_supero_umbral = False
+
+            try:
+                valor_max = int(fila[max_cola_idx])
+            except (ValueError, TypeError):
+                valor_max = 0
+
+            if valor_max > x_cola and not dia_supero_umbral:
+                contador_dias += 1
+                dia_supero_umbral = True
+
+            fila_actualizada = list(fila)
+            fila_actualizada.insert(insert_idx, str(contador_dias))
+            filas_actualizadas.append(fila_actualizada)
+
+        return encabezados_actualizados, filas_actualizadas
+
     # ------------------------------------------------------------------
     # Lógica de paginación
     # ------------------------------------------------------------------
@@ -866,6 +873,7 @@ class AplicacionPeluqueria:
                 tag = "ultima"
             else:
                 tag = "par" if i % 2 == 0 else "impar"
+
             self.tabla.insert("", tk.END, values=fila, tags=(tag,))
 
     def _actualizar_controles_paginacion(self):

@@ -38,7 +38,12 @@ _COLUMNAS_TABLA_BASE = [
 ]
 
 # Columnas por cada cliente temporal
-_COLS_POR_CLIENTE = ["Estado", "Llegada", "Ini. At."]
+_COLS_POR_CLIENTE = [
+    "Estado",
+    "Hs Refrig",
+    "¿Refrig?",
+    "Costo"
+]
 
 
 def simular(n_dias: int, x_cola: int, h_euler: float = 1.0,
@@ -141,20 +146,25 @@ def _agregar_columnas_clientes(filas: list, objetos_por_fila: dict) -> tuple:
         (filas_extendidas, encabezados_completos)
     """
     # Determinar el máximo de clientes simultáneos en cualquier fila
-    max_clientes = 0
-    for clientes in objetos_por_fila.values():
-        if len(clientes) > max_clientes:
-            max_clientes = len(clientes)
+    clientes_visibles = set()
 
-    # Generar encabezados dinámicos
+    for clientes in objetos_por_fila.values():
+        for cliente in clientes:
+            clientes_visibles.add(cliente.numero)
+
+    clientes_visibles = sorted(clientes_visibles)
+
     encabezados_clientes = []
-    for i in range(1, max_clientes + 1):
+
+    for nro_cliente in clientes_visibles:
         for col in _COLS_POR_CLIENTE:
-            encabezados_clientes.append(f"Cli {i} {col}")
+            encabezados_clientes.append(
+                f"Cli {nro_cliente} {col}"
+            )
 
     encabezados_completos = list(_COLUMNAS_TABLA_BASE) + encabezados_clientes
 
-    cols_vacias = ["-"] * (max_clientes * len(_COLS_POR_CLIENTE))
+   
 
     filas_extendidas = []
     for fila in filas:
@@ -162,29 +172,54 @@ def _agregar_columnas_clientes(filas: list, objetos_por_fila: dict) -> tuple:
         clientes = objetos_por_fila.get(nro_fila, [])
 
         columnas_clientes = []
-        for cliente in clientes:
-            tipo_nombre = _NOMBRE_TIPO.get(cliente.tipo, cliente.tipo)
+        clientes_fila = {
+            cliente.numero: cliente
+            for cliente in clientes
+        }
 
+        for nro_cliente in clientes_visibles:
+
+            cliente = clientes_fila.get(nro_cliente)
+
+            if cliente is None:
+                columnas_clientes.extend(["", "", "", ""])
+                continue
             # Estado
             if cliente.estado == "en_cola":
-                estado_txt = f"Cola {tipo_nombre}"
+                estado = f"EA({_NOMBRE_TIPO.get(cliente.tipo, cliente.tipo)})"
             elif cliente.estado == "siendo_atendido":
-                estado_txt = f"Atend. {tipo_nombre}"
+                estado = f"SA({_NOMBRE_TIPO.get(cliente.tipo, cliente.tipo)})"
             else:
-                estado_txt = "Atendido"
+                estado = ""
 
-            columnas_clientes.append(estado_txt)
-            columnas_clientes.append(f"{cliente.tiempo_llegada:.2f}")
+            # Hora de refrigerio
+            # Hora programada de refrigerio
 
-            if cliente.estado == "siendo_atendido" and cliente.tiempo_inicio_atencion > 0:
-                columnas_clientes.append(f"{cliente.tiempo_inicio_atencion:.2f}")
+            if (
+                cliente.estado == "en_cola"
+                or cliente.elegible_refrigerio
+                or cliente.recibio_bebida
+            ):
+                hs_refrig = f"{cliente.tiempo_llegada + TIEMPO_ESPERA_BEBIDA:.2f}"
             else:
-                columnas_clientes.append("-")
+                hs_refrig = "-"
+
+            # ¿Recibió refrigerio?
+            refrig = "SI" if getattr(cliente, "recibio_bebida", False) else "NO"
+
+            # Costo
+            costo = str(COSTO_BEBIDA) if getattr(cliente, "recibio_bebida", False) else "0"
+
+            columnas_clientes.extend([
+                estado,
+                hs_refrig,
+                refrig,
+                costo,
+            ])
+
 
         # Rellenar columnas faltantes con "-"
-        faltan = (max_clientes * len(_COLS_POR_CLIENTE)) - len(columnas_clientes)
-        if faltan > 0:
-            columnas_clientes.extend(["-"] * faltan)
+        
 
         filas_extendidas.append(list(fila) + columnas_clientes)
 
@@ -329,6 +364,8 @@ def _simular_dia(numero_dia: int, h_euler: float,
     }
 
     reloj = 0.0
+    ultimo_reloj = 0.0
+    ultimo_reloj_snapshot = 0.0
     recaudacion = 0.0
     bebidas = 0
     costo_bebidas = 0.0
@@ -359,12 +396,14 @@ def _simular_dia(numero_dia: int, h_euler: float,
             clientes_atendidos, max_total_en_espera
         )
     )
+    ultimo_reloj_snapshot = 0.0
     resultado.objetos_por_fila[nro_fila_actual] = _capturar_objetos_temporales(
         servidores, colas, 0.0
     )
     nro_fila_local += 1
 
     heapq.heappush(eventos, Evento(tiempo=prox_llegada, tipo="llegada"))
+    heapq.heappush(eventos, Evento(tiempo=DURACION_RECEPCION_MIN, tipo="fin_recepcion_clientes"))
 
     while eventos:
         # Cap de iteraciones
@@ -373,6 +412,7 @@ def _simular_dia(numero_dia: int, h_euler: float,
 
         evento = heapq.heappop(eventos)
         reloj = evento.tiempo
+        ultimo_reloj = reloj
         iteraciones_dia += 1
 
         if evento.tipo == "llegada":
@@ -447,6 +487,25 @@ def _simular_dia(numero_dia: int, h_euler: float,
                     clientes_atendidos, max_total_en_espera
                 )
             )
+            ultimo_reloj_snapshot = reloj
+            resultado.objetos_por_fila[nro_fila_actual] = _capturar_objetos_temporales(
+                servidores, colas, reloj
+            )
+            nro_fila_local += 1
+
+        elif evento.tipo == "fin_recepcion_clientes":
+            nro_fila_actual = nro_fila_offset + nro_fila_local
+            resultado.filas_tabla.append(
+                _generar_snapshot(
+                    nro_fila_actual, numero_dia, "Fin Recepción Clientes", reloj,
+                    None, None, None, None,
+                    None, None, servidores, colas, fin_atencion,
+                    eventos,
+                    recaudacion_acumulada, bebidas_acumuladas, costo_bebidas_acumulado,
+                    clientes_atendidos, max_total_en_espera
+                )
+            )
+            ultimo_reloj_snapshot = reloj
             resultado.objetos_por_fila[nro_fila_actual] = _capturar_objetos_temporales(
                 servidores, colas, reloj
             )
@@ -526,6 +585,7 @@ def _simular_dia(numero_dia: int, h_euler: float,
                     clientes_atendidos, max_total_en_espera
                 )
             )
+            ultimo_reloj_snapshot = reloj
             resultado.objetos_por_fila[nro_fila_actual] = _capturar_objetos_temporales(
                 servidores, colas, reloj
             )
@@ -559,10 +619,29 @@ def _simular_dia(numero_dia: int, h_euler: float,
                         clientes_atendidos, max_total_en_espera
                     )
                 )
+                ultimo_reloj_snapshot = reloj
                 resultado.objetos_por_fila[nro_fila_actual] = _capturar_objetos_temporales(
                     servidores, colas, reloj
                 )
                 nro_fila_local += 1
+
+    # Agregar evento de fin de día como fila separada debajo del último evento del día.
+    # Usa el mismo reloj del último evento procesado.
+    nro_fila_actual = nro_fila_offset + nro_fila_local
+    resultado.filas_tabla.append(
+        _generar_snapshot(
+            nro_fila_actual, numero_dia, "Fin Día", ultimo_reloj_snapshot,
+            None, None, None, None,
+            None, None, servidores, colas, fin_atencion,
+            eventos,
+            recaudacion_acumulada, bebidas_acumuladas, costo_bebidas_acumulado,
+            clientes_atendidos, max_total_en_espera
+        )
+    )
+    resultado.objetos_por_fila[nro_fila_actual] = _capturar_objetos_temporales(
+        servidores, colas, reloj
+    )
+    nro_fila_local += 1
 
     resultado.recaudacion = recaudacion - costo_bebidas  # Recaudación neta (ingresos - costo refrigerios)
     resultado.clientes_atendidos = clientes_atendidos

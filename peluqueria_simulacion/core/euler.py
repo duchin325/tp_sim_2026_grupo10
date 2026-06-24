@@ -57,7 +57,7 @@ def euler(f, t0: float, y0: float, h: float, C: int, T: int) -> float:
     t = t0
     y = y0
     while y < T:
-        y = y + f(t, y, C, T)
+        y = y + h* f(t, y, C, T)
         t = t + h
     return t
 
@@ -77,7 +77,7 @@ def euler_con_detalle(f, t0: float, y0: float, h: float, C: int, T: int):
     paso_num = 0
     while y < T:
         dDdt = f(t, y, C, T)
-        y_nuevo = y + dDdt
+        y_nuevo = y + h *dDdt
         pasos.append((paso_num, t, y, dDdt, y_nuevo))
         y = y_nuevo
         t = t + h
