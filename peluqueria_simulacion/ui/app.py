@@ -3,7 +3,13 @@ from tkinter import ttk, messagebox
 
 from core.simulacion import simular
 from ui.euler_dialog import EulerDialog
-from utils.validaciones import validar_inputs_simulacion, validar_entero_positivo
+from utils.validaciones import (
+    validar_inputs_simulacion,
+    validar_entero_positivo,
+    validar_porcentajes,
+    validar_limites_llegada,
+    validar_t_euler,
+)
 
 
 # Nombre legible para cada tipo de servidor
@@ -89,7 +95,6 @@ class AplicacionPeluqueria:
         self._construir_panel_resultados()
         self._construir_tabla_eventos()
         self._construir_controles_paginacion()
-        self._construir_panel_objetos_temporales()
 
     def _construir_encabezado(self):
         frame = tk.Frame(self.ventana, bg="#2c3e50", pady=10)
@@ -110,64 +115,157 @@ class AplicacionPeluqueria:
         ).pack()
 
     def _construir_panel_inputs(self):
-        frame = tk.LabelFrame(self.ventana, text="Parámetros de entrada", padx=10, pady=8)
-        frame.pack(fill=tk.X, padx=12, pady=(8, 4))
+        # Contenedor principal con grid para alinear cajas + botón
+        contenedor = tk.Frame(self.ventana)
+        contenedor.pack(fill=tk.X, padx=12, pady=(8, 4))
+        contenedor.columnconfigure(0, weight=1)  # Cajas de parámetros
+        contenedor.columnconfigure(1, weight=0)  # Botón
 
-        # --- Fila 1: Parámetros de simulación ---
+        # --- Frame izquierdo: todas las cajas de parámetros ---
+        frame_params = tk.Frame(contenedor)
+        frame_params.grid(row=0, column=0, sticky="nsew")
+
         lbl_style = {"font": ("Helvetica", 9)}
         entry_width = 10
 
+        # ═══════════════════════════════════════════════════════
+        # Caja 1: Parámetros de simulación
+        # ═══════════════════════════════════════════════════════
+        caja_sim = tk.LabelFrame(frame_params, text="Parámetros de simulación", padx=8, pady=6)
+        caja_sim.grid(row=0, column=0, padx=(0, 6), pady=2, sticky="nsew")
+
         # N Días
-        tk.Label(frame, text="N (Días a simular):", **lbl_style).grid(row=0, column=0, sticky=tk.W, padx=4, pady=3)
-        self.entrada_n_dias = tk.Entry(frame, width=entry_width)
+        tk.Label(caja_sim, text="N (Días):", **lbl_style).grid(row=0, column=0, sticky=tk.W, padx=3, pady=2)
+        self.entrada_n_dias = tk.Entry(caja_sim, width=entry_width)
         self.entrada_n_dias.insert(0, "100")
-        self.entrada_n_dias.grid(row=0, column=1, sticky=tk.W, padx=4)
+        self.entrada_n_dias.grid(row=0, column=1, sticky=tk.W, padx=3)
 
         # X cola
-        tk.Label(frame, text="X (Umbral cola):", **lbl_style).grid(row=0, column=2, sticky=tk.W, padx=4)
-        self.entrada_x_cola = tk.Entry(frame, width=entry_width)
+        tk.Label(caja_sim, text="X (Umbral cola):", **lbl_style).grid(row=1, column=0, sticky=tk.W, padx=3, pady=2)
+        self.entrada_x_cola = tk.Entry(caja_sim, width=entry_width)
         self.entrada_x_cola.insert(0, "3")
-        self.entrada_x_cola.grid(row=0, column=3, sticky=tk.W, padx=4)
+        self.entrada_x_cola.grid(row=1, column=1, sticky=tk.W, padx=3)
 
         # h Euler
-        tk.Label(frame, text="h (Paso Euler):", **lbl_style).grid(row=0, column=4, sticky=tk.W, padx=4)
-        self.entrada_h_euler = tk.Entry(frame, width=entry_width)
+        tk.Label(caja_sim, text="h (Paso Euler):", **lbl_style).grid(row=2, column=0, sticky=tk.W, padx=3, pady=2)
+        self.entrada_h_euler = tk.Entry(caja_sim, width=entry_width)
         self.entrada_h_euler.insert(0, "1")
-        self.entrada_h_euler.grid(row=0, column=5, sticky=tk.W, padx=4)
+        self.entrada_h_euler.grid(row=2, column=1, sticky=tk.W, padx=3)
 
-        # --- Fila 2: Parámetros de visualización ---
+        # ═══════════════════════════════════════════════════════
+        # Caja 2: Parámetros de visualización
+        # ═══════════════════════════════════════════════════════
+        caja_vis = tk.LabelFrame(frame_params, text="Visualización", padx=8, pady=6)
+        caja_vis.grid(row=0, column=1, padx=6, pady=2, sticky="nsew")
 
         # j hora
-        tk.Label(frame, text="j (Minuto desde):", **lbl_style).grid(row=1, column=0, sticky=tk.W, padx=4, pady=3)
-        self.entrada_hora_j = tk.Entry(frame, width=entry_width)
+        tk.Label(caja_vis, text="j (Minuto desde):", **lbl_style).grid(row=0, column=0, sticky=tk.W, padx=3, pady=2)
+        self.entrada_hora_j = tk.Entry(caja_vis, width=entry_width)
         self.entrada_hora_j.insert(0, "0")
-        self.entrada_hora_j.grid(row=1, column=1, sticky=tk.W, padx=4)
+        self.entrada_hora_j.grid(row=0, column=1, sticky=tk.W, padx=3)
 
         # i iteraciones
-        tk.Label(frame, text="i (Filas a mostrar):", **lbl_style).grid(row=1, column=2, sticky=tk.W, padx=4)
-        self.entrada_iter_i = tk.Entry(frame, width=entry_width)
+        tk.Label(caja_vis, text="i (Filas a mostrar):", **lbl_style).grid(row=1, column=0, sticky=tk.W, padx=3, pady=2)
+        self.entrada_iter_i = tk.Entry(caja_vis, width=entry_width)
         self.entrada_iter_i.insert(0, "100")
-        self.entrada_iter_i.grid(row=1, column=3, sticky=tk.W, padx=4)
+        self.entrada_iter_i.grid(row=1, column=1, sticky=tk.W, padx=3)
 
         # Filas por página
-        tk.Label(frame, text="Filas por página:", **lbl_style).grid(row=1, column=4, sticky=tk.W, padx=4)
-        self.entrada_filas_por_pagina = tk.Entry(frame, width=entry_width)
+        tk.Label(caja_vis, text="Filas por página:", **lbl_style).grid(row=2, column=0, sticky=tk.W, padx=3, pady=2)
+        self.entrada_filas_por_pagina = tk.Entry(caja_vis, width=entry_width)
         self.entrada_filas_por_pagina.insert(0, "50")
-        self.entrada_filas_por_pagina.grid(row=1, column=5, sticky=tk.W, padx=4)
+        self.entrada_filas_por_pagina.grid(row=2, column=1, sticky=tk.W, padx=3)
 
-        # Botón Simular
+        # ═══════════════════════════════════════════════════════
+        # Caja 3: Porcentajes de atención
+        # ═══════════════════════════════════════════════════════
+        caja_porc = tk.LabelFrame(frame_params, text="Porcentajes de atención", padx=8, pady=6)
+        caja_porc.grid(row=0, column=2, padx=6, pady=2, sticky="nsew")
+
+        # % Colorista
+        tk.Label(caja_porc, text="% Colorista:", **lbl_style).grid(row=0, column=0, sticky=tk.W, padx=3, pady=2)
+        self.entrada_porc_colorista = tk.Entry(caja_porc, width=entry_width)
+        self.entrada_porc_colorista.insert(0, "15")
+        self.entrada_porc_colorista.grid(row=0, column=1, sticky=tk.W, padx=3)
+        self.entrada_porc_colorista.bind("<KeyRelease>", self._actualizar_porc_pb)
+
+        # % Peluquero A
+        tk.Label(caja_porc, text="% Peluquero A:", **lbl_style).grid(row=1, column=0, sticky=tk.W, padx=3, pady=2)
+        self.entrada_porc_peluquero_a = tk.Entry(caja_porc, width=entry_width)
+        self.entrada_porc_peluquero_a.insert(0, "45")
+        self.entrada_porc_peluquero_a.grid(row=1, column=1, sticky=tk.W, padx=3)
+        self.entrada_porc_peluquero_a.bind("<KeyRelease>", self._actualizar_porc_pb)
+
+        # % Peluquero B (label calculado)
+        tk.Label(caja_porc, text="% Peluquero B:", **lbl_style).grid(row=2, column=0, sticky=tk.W, padx=3, pady=2)
+        self.label_porc_peluquero_b = tk.Label(caja_porc, text="40.0%", font=("Helvetica", 10, "bold"), fg="#2980b9")
+        self.label_porc_peluquero_b.grid(row=2, column=1, sticky=tk.W, padx=3)
+
+        # ═══════════════════════════════════════════════════════
+        # Caja 4: Tiempo entre llegadas
+        # ═══════════════════════════════════════════════════════
+        caja_lleg = tk.LabelFrame(frame_params, text="Tiempo entre llegadas U(A,B)", padx=8, pady=6)
+        caja_lleg.grid(row=0, column=3, padx=6, pady=2, sticky="nsew")
+
+        # A (Llegada mín)
+        tk.Label(caja_lleg, text="A (mín):", **lbl_style).grid(row=0, column=0, sticky=tk.W, padx=3, pady=2)
+        self.entrada_llegada_min = tk.Entry(caja_lleg, width=entry_width)
+        self.entrada_llegada_min.insert(0, "2")
+        self.entrada_llegada_min.grid(row=0, column=1, sticky=tk.W, padx=3)
+
+        # B (Llegada máx)
+        tk.Label(caja_lleg, text="B (máx):", **lbl_style).grid(row=1, column=0, sticky=tk.W, padx=3, pady=2)
+        self.entrada_llegada_max = tk.Entry(caja_lleg, width=entry_width)
+        self.entrada_llegada_max.insert(0, "12")
+        self.entrada_llegada_max.grid(row=1, column=1, sticky=tk.W, padx=3)
+
+        # ═══════════════════════════════════════════════════════
+        # Caja 5: Constantes T (Euler)
+        # ═══════════════════════════════════════════════════════
+        caja_t = tk.LabelFrame(frame_params, text="Constantes T (Euler)", padx=8, pady=6)
+        caja_t.grid(row=0, column=4, padx=(6, 0), pady=2, sticky="nsew")
+
+        # T Colorista
+        tk.Label(caja_t, text="T Colorista:", **lbl_style).grid(row=0, column=0, sticky=tk.W, padx=3, pady=2)
+        self.entrada_t_colorista = tk.Entry(caja_t, width=entry_width)
+        self.entrada_t_colorista.insert(0, "180")
+        self.entrada_t_colorista.grid(row=0, column=1, sticky=tk.W, padx=3)
+
+        # T Peluqueros
+        tk.Label(caja_t, text="T Peluqueros:", **lbl_style).grid(row=1, column=0, sticky=tk.W, padx=3, pady=2)
+        self.entrada_t_peluqueros = tk.Entry(caja_t, width=entry_width)
+        self.entrada_t_peluqueros.insert(0, "130")
+        self.entrada_t_peluqueros.grid(row=1, column=1, sticky=tk.W, padx=3)
+
+        # --- Botón Simular (a la derecha, separado) ---
+        frame_boton = tk.Frame(contenedor)
+        frame_boton.grid(row=0, column=1, padx=(20, 0), sticky="ns")
+
         tk.Button(
-            frame,
+            frame_boton,
             text="▶  Simular",
             command=self._on_simular,
             bg="#27ae60",
             fg="white",
-            font=("Helvetica", 10, "bold"),
-            padx=16,
-            pady=8,
+            font=("Helvetica", 12, "bold"),
+            padx=24,
+            pady=16,
             relief=tk.FLAT,
             cursor="hand2",
-        ).grid(row=0, column=6, rowspan=2, padx=16, pady=4, sticky="ns")
+        ).pack(expand=True, fill=tk.BOTH, padx=4, pady=4)
+
+    def _actualizar_porc_pb(self, event=None):
+        """Actualiza en tiempo real el label de % Peluquero B."""
+        try:
+            porc_col = float(self.entrada_porc_colorista.get().strip() or "0")
+            porc_pa = float(self.entrada_porc_peluquero_a.get().strip() or "0")
+            porc_pb = 100 - porc_col - porc_pa
+            if porc_pb < 0:
+                self.label_porc_peluquero_b.config(text="Error!", fg="#e74c3c")
+            else:
+                self.label_porc_peluquero_b.config(text=f"{porc_pb:.1f}%", fg="#2980b9")
+        except ValueError:
+            self.label_porc_peluquero_b.config(text="—", fg="#e74c3c")
 
     def _construir_panel_formulas(self):
         frame = tk.LabelFrame(self.ventana, text="Fórmulas utilizadas", padx=10, pady=6)
@@ -205,25 +303,69 @@ class AplicacionPeluqueria:
             setattr(self, atributo, label)
 
     def _construir_tabla_eventos(self):
+        """Construye la tabla única del vector de estado con scroll horizontal y vertical."""
         frame = tk.LabelFrame(self.ventana, text="Vector de Estado — Tabla de eventos", padx=6, pady=6)
         frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=(2, 2))
 
+        # --- Barra de encabezados de grupo (para clientes) ---
+        self.frame_grupo_header = tk.Frame(frame, height=20)
+        self.frame_grupo_header.pack(fill=tk.X)
+        self.frame_grupo_header.pack_propagate(False)
+
+        self.canvas_grupo = tk.Canvas(self.frame_grupo_header, height=20, bg="#2c3e50", highlightthickness=0)
+        self.canvas_grupo.pack(fill=tk.BOTH, expand=True)
+
+        # Frame interno del canvas para los labels de grupo
+        self.frame_grupo_labels = tk.Frame(self.canvas_grupo, bg="#2c3e50")
+        self.canvas_grupo_window = self.canvas_grupo.create_window((0, 0), window=self.frame_grupo_labels, anchor=tk.NW)
+
+        # Ocultar inicialmente (se muestra cuando hay clientes)
+        self.frame_grupo_header.pack_forget()
+
+        # --- Tabla principal ---
         scroll_y = tk.Scrollbar(frame, orient=tk.VERTICAL)
         scroll_x = tk.Scrollbar(frame, orient=tk.HORIZONTAL)
 
         self.tabla = ttk.Treeview(
             frame,
             yscrollcommand=scroll_y.set,
-            xscrollcommand=scroll_x.set,
             show="headings",
             height=4,
         )
         scroll_y.config(command=self.tabla.yview)
-        scroll_x.config(command=self.tabla.xview)
+
+        # Scroll horizontal sincronizado: tabla + encabezados de grupo
+        def _on_scroll_x(*args):
+            self.tabla.xview(*args)
+            self.canvas_grupo.xview(*args)
+
+        scroll_x.config(command=_on_scroll_x)
+        self.tabla.config(xscrollcommand=lambda *args: (scroll_x.set(*args), self._sincronizar_grupo_scroll()))
 
         scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
         scroll_x.pack(side=tk.BOTTOM, fill=tk.X)
         self.tabla.pack(fill=tk.BOTH, expand=True)
+
+        # Barra de detalle de celda
+        frame_detalle = tk.Frame(frame, bg="#ecf0f1", bd=1, relief=tk.SUNKEN)
+        frame_detalle.pack(fill=tk.X, pady=(4, 0))
+
+        tk.Label(
+            frame_detalle, text="📋", font=("Helvetica", 10), bg="#ecf0f1",
+        ).pack(side=tk.LEFT, padx=(6, 2))
+
+        self.label_detalle_celda = tk.Label(
+            frame_detalle,
+            text="Hacé click en una celda para ver su contenido completo.",
+            font=("Consolas", 9), bg="#ecf0f1", fg="#555555",
+            anchor=tk.W,
+        )
+        self.label_detalle_celda.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4, pady=3)
+
+        # Bind clicks
+        self.tabla.bind("<ButtonRelease-1>", self._on_click_celda)
+        self.tabla.bind("<Button-3>", self._on_right_click_celda)
+        self.tabla.bind("<<TreeviewSelect>>", self._on_seleccionar_fila)
 
         # Placeholder columns
         self._configurar_columnas_tabla([
@@ -238,19 +380,146 @@ class AplicacionPeluqueria:
             "Clientes Atend.", "Máx Cola Total",
         ])
 
-        # Vincular selección de fila al panel de objetos temporales
-        self.tabla.bind("<<TreeviewSelect>>", self._on_seleccion_fila)
+    def _on_seleccionar_fila(self, event):
+        """Actualiza los encabezados de grupo para mostrar el Nro de Cliente real."""
+        seleccion = self.tabla.selection()
+        if not seleccion:
+            # Restaurar a valores por defecto si no hay selección
+            self._actualizar_textos_grupo(None)
+            return
+            
+        item = seleccion[0]
+        valores = self.tabla.item(item, "values")
+        if not valores:
+            return
+            
+        try:
+            nro_evento = int(valores[0])
+        except ValueError:
+            return
+            
+        clientes_en_fila = self.objetos_por_fila.get(nro_evento, [])
+        self._actualizar_textos_grupo(clientes_en_fila)
 
-        # Label informativo
-        tk.Label(
-            frame,
-            text="Seleccioná una fila para ver los objetos temporales (clientes) presentes en ese instante.",
-            font=("Helvetica", 8, "italic"), fg="#7f8c8d",
-        ).pack(anchor=tk.W, pady=(2, 0))
+    def _actualizar_textos_grupo(self, clientes_en_fila):
+        """Actualiza el texto de los recuadros de colores."""
+        if not hasattr(self, '_labels_grupo_refs'):
+            return
+            
+        for i, lbl in enumerate(self._labels_grupo_refs):
+            # Lógica anterior comentada por si se desea volver atrás:
+            # lbl.config(text=f"Cliente {i + 1}")
+            
+            if clientes_en_fila and i < len(clientes_en_fila):
+                lbl.config(text=f"Cliente {clientes_en_fila[i].numero}")
+            else:
+                lbl.config(text=f"Slot {i + 1} (Vacío)")
+
+    def _sincronizar_grupo_scroll(self):
+        """Sincroniza la posición del canvas de grupo con la tabla."""
+        try:
+            x_pos = self.tabla.xview()
+            self.canvas_grupo.xview_moveto(x_pos[0])
+        except Exception:
+            pass
+
+    def _on_click_celda(self, event):
+        """Muestra el contenido completo de la celda clickeada en la barra de detalle."""
+        # Identificar fila y columna clickeada
+        item = self.tabla.identify_row(event.y)
+        col_id = self.tabla.identify_column(event.x)
+
+        if not item or not col_id:
+            return
+
+        # col_id es "#1", "#2", etc. Extraer índice
+        try:
+            col_idx = int(col_id.replace("#", "")) - 1
+        except ValueError:
+            return
+
+        valores = self.tabla.item(item, "values")
+        if not valores or col_idx >= len(valores):
+            return
+
+        # Obtener nombre completo de la columna (incluyendo grupo si es cliente)
+        columnas = self.tabla["columns"]
+        col_id_name = columnas[col_idx] if col_idx < len(columnas) else f"Col {col_idx}"
+        nombre_display = getattr(self, '_nombre_completo_columna', {}).get(col_id_name, col_id_name)
+        valor = valores[col_idx]
+
+        self.label_detalle_celda.config(
+            text=f"{nombre_display}:  {valor}",
+            fg="#2c3e50",
+        )
+
+    def _on_right_click_celda(self, event):
+        """Muestra menú contextual para abrir tabla de Euler si corresponde."""
+        item = self.tabla.identify_row(event.y)
+        col_id = self.tabla.identify_column(event.x)
+
+        if not item or not col_id:
+            return
+
+        self.tabla.selection_set(item)
+
+        try:
+            col_idx = int(col_id.replace("#", "")) - 1
+        except ValueError:
+            return
+
+        valores = self.tabla.item(item, "values")
+        if not valores or col_idx >= len(valores):
+            return
+
+        columnas = self.tabla["columns"]
+        col_id_name = columnas[col_idx] if col_idx < len(columnas) else f"Col {col_idx}"
+
+        import re
+        match = re.match(r"^Cli (\d+) (.+)$", col_id_name)
+        if not match:
+            return
+            
+        idx_grupo = int(match.group(1)) - 1  # Índice 0-based del cliente activo en esa fila
+
+        try:
+            nro_evento = int(valores[0])
+        except ValueError:
+            return
+
+        # Buscar el cliente en objetos_por_fila por su posición
+        clientes_en_fila = self.objetos_por_fila.get(nro_evento, [])
+        if idx_grupo < 0 or idx_grupo >= len(clientes_en_fila):
+            return
+            
+        cliente_obj = clientes_en_fila[idx_grupo]
+        numero_real_cliente = getattr(cliente_obj, "numero", "?")
+
+        # Validar si tiene pasos de Euler
+        pasos = getattr(cliente_obj, "pasos_euler", [])
+        
+        # Crear y mostrar menú contextual
+        menu = tk.Menu(self.ventana, tearoff=0)
+        
+        if pasos:
+            menu.add_command(
+                label=f"Ver tabla Euler (Cliente {numero_real_cliente})",
+                command=lambda: self._abrir_dialogo_euler(cliente_obj)
+            )
+        else:
+            menu.add_command(
+                label=f"Euler no calculado aún (en cola)",
+                state=tk.DISABLED
+            )
+            
+        menu.tk_popup(event.x_root, event.y_root)
+
+    def _abrir_dialogo_euler(self, cliente):
+        EulerDialog(self.ventana, cliente, self.h_euler_actual)
 
     def _construir_controles_paginacion(self):
         frame = tk.Frame(self.ventana, pady=4)
-        frame.pack(fill=tk.X, padx=12, pady=(0, 2))
+        frame.pack(fill=tk.X, padx=12, pady=(0, 8))
 
         self.btn_primera = tk.Button(
             frame, text="« Primera", command=self._on_primera_pagina,
@@ -291,60 +560,132 @@ class AplicacionPeluqueria:
 
         self._actualizar_controles_paginacion()
 
-    def _construir_panel_objetos_temporales(self):
-        """Panel inferior que muestra tarjetas de clientes activos en la fila seleccionada."""
-        self.frame_objetos = tk.LabelFrame(
-            self.ventana,
-            text="Objetos temporales presentes",
-            padx=8, pady=6,
-        )
-        self.frame_objetos.pack(fill=tk.X, padx=12, pady=(0, 8))
-
-        # Título dinámico
-        self.label_objetos_titulo = tk.Label(
-            self.frame_objetos,
-            text="Seleccioná una fila del vector de estado para ver los clientes activos.",
-            font=("Helvetica", 9, "italic"), fg="#7f8c8d",
-        )
-        self.label_objetos_titulo.pack(anchor=tk.W, pady=(0, 4))
-
-        # Canvas con scroll horizontal para las tarjetas
-        canvas_frame = tk.Frame(self.frame_objetos)
-        canvas_frame.pack(fill=tk.X, expand=False)
-
-        self.canvas_objetos = tk.Canvas(canvas_frame, height=170, bg="#f0f0f0", highlightthickness=0)
-        scroll_x_obj = tk.Scrollbar(canvas_frame, orient=tk.HORIZONTAL, command=self.canvas_objetos.xview)
-        self.canvas_objetos.configure(xscrollcommand=scroll_x_obj.set)
-
-        scroll_x_obj.pack(side=tk.BOTTOM, fill=tk.X)
-        self.canvas_objetos.pack(fill=tk.X, expand=True)
-
-        # Frame interno dentro del canvas
-        self.frame_tarjetas = tk.Frame(self.canvas_objetos, bg="#f0f0f0")
-        self.canvas_window = self.canvas_objetos.create_window(
-            (0, 0), window=self.frame_tarjetas, anchor=tk.NW
-        )
-
-        self.frame_tarjetas.bind("<Configure>", self._on_tarjetas_configure)
-
-    def _on_tarjetas_configure(self, event=None):
-        """Actualiza la región de scroll del canvas cuando cambian las tarjetas."""
-        self.canvas_objetos.configure(scrollregion=self.canvas_objetos.bbox("all"))
-
     def _configurar_columnas_tabla(self, columnas: list):
+        """Configura columnas de la tabla y genera encabezados de grupo para clientes."""
         self.tabla["columns"] = columnas
+
+        # Mapeo de ID de columna -> nombre completo para la barra de detalle
+        self._nombre_completo_columna = {}
 
         # Anchos personalizados por tipo de columna
         anchos = {
-            "Nro": 50, "Día": 40, "Evento": 110,
-            "Reloj (min)": 80, "Reloj (HH:MM)": 80,
+            "Nro": 50, "Día": 40, "Evento": 130,
+            "Reloj (min)": 80, "Reloj (HH:MM)": 85,
             "Próx. Eventos": 200,
         }
 
-        for col in columnas:
-            self.tabla.heading(col, text=col)
-            ancho = anchos.get(col, 95)
-            self.tabla.column(col, width=ancho, anchor=tk.CENTER, minwidth=60, stretch=False)
+        import re
+
+        # Info de grupos de clientes: [(nro_cliente, col_inicio_idx, col_fin_idx), ...]
+        grupos_clientes = []
+        cliente_actual_grp = None
+        col_inicio_grp = None
+
+        for idx, col in enumerate(columnas):
+            # Detectar columnas de clientes: "Cli N Atributo"
+            match = re.match(r"^Cli (\d+) (.+)$", col)
+            if match:
+                nro_cli = int(match.group(1))
+                atributo = match.group(2)
+
+                # Guardar nombre completo para la barra de detalle
+                self._nombre_completo_columna[col] = f"Cliente {nro_cli} — {atributo}"
+
+                # Heading muestra solo el atributo
+                self.tabla.heading(col, text=atributo)
+                self.tabla.column(col, width=80, anchor=tk.CENTER, minwidth=60, stretch=False)
+
+                # Tracking de grupos
+                if nro_cli != cliente_actual_grp:
+                    if cliente_actual_grp is not None:
+                        grupos_clientes.append((cliente_actual_grp, col_inicio_grp, idx - 1))
+                    cliente_actual_grp = nro_cli
+                    col_inicio_grp = idx
+            else:
+                # Cerrar grupo anterior si existía
+                if cliente_actual_grp is not None:
+                    grupos_clientes.append((cliente_actual_grp, col_inicio_grp, idx - 1))
+                    cliente_actual_grp = None
+                    col_inicio_grp = None
+
+                self._nombre_completo_columna[col] = col
+                self.tabla.heading(col, text=col)
+                ancho = anchos.get(col, 95)
+                self.tabla.column(col, width=ancho, anchor=tk.CENTER, minwidth=60, stretch=False)
+
+        # Cerrar último grupo si la tabla termina con columnas de cliente
+        if cliente_actual_grp is not None:
+            grupos_clientes.append((cliente_actual_grp, col_inicio_grp, len(columnas) - 1))
+
+        # Construir encabezados de grupo
+        self._construir_grupo_headers(columnas, grupos_clientes, anchos)
+
+    def _construir_grupo_headers(self, columnas: list, grupos_clientes: list, anchos: dict):
+        """Construye la fila de encabezados de grupo (Cliente 1, Cliente 2, etc.)."""
+        import re
+
+        # Limpiar labels anteriores
+        for w in self.frame_grupo_labels.winfo_children():
+            w.destroy()
+
+        if not grupos_clientes:
+            self.frame_grupo_header.pack_forget()
+            return
+
+        # Mostrar la barra de grupo
+        self.frame_grupo_header.pack(fill=tk.X)
+        self.frame_grupo_header.config(height=22)
+
+        # Mapear qué columnas pertenecen a qué cliente
+        grupo_dict = {}
+        for nro_cli, col_ini, col_fin in grupos_clientes:
+            for i in range(col_ini, col_fin + 1):
+                grupo_dict[i] = nro_cli
+
+        # Colores alternados para grupos de clientes
+        colores_grupo = ["#1a5276", "#1e8449", "#7d3c98", "#b9770e", "#922b21", "#148f77"]
+
+        self._labels_grupo_refs = []
+        idx = 0
+        while idx < len(columnas):
+            if idx in grupo_dict:
+                # Inicio de un grupo de cliente
+                nro_cli = grupo_dict[idx]
+                ancho_total = 0
+                count = 0
+                while idx + count < len(columnas) and grupo_dict.get(idx + count) == nro_cli:
+                    ancho_total += 80  # ancho de columna de cliente
+                    count += 1
+
+                color = colores_grupo[(nro_cli - 1) % len(colores_grupo)]
+                lbl_frame = tk.Frame(self.frame_grupo_labels, bg=color, width=ancho_total, height=22,
+                                     relief=tk.RIDGE, bd=1)
+                lbl_frame.pack(side=tk.LEFT)
+                lbl_frame.pack_propagate(False)
+                
+                lbl = tk.Label(
+                    lbl_frame,
+                    text=f"{nro_cli}º Cliente", # Texto estático (fallback)
+                    bg=color, fg="white",
+                    font=("Helvetica", 8, "bold"),
+                )
+                lbl.pack(expand=True)
+                self._labels_grupo_refs.append(lbl)
+
+                idx += count
+            else:
+                # Columna normal — spacer
+                col = columnas[idx]
+                match = re.match(r"^Cli (\d+) (.+)$", col)
+                ancho = anchos.get(col, 95) if not match else 80
+                spacer = tk.Frame(self.frame_grupo_labels, bg="#2c3e50", width=ancho, height=22)
+                spacer.pack(side=tk.LEFT)
+                spacer.pack_propagate(False)
+                idx += 1
+
+        # Actualizar scroll region del canvas de grupo
+        self.frame_grupo_labels.update_idletasks()
+        self.canvas_grupo.config(scrollregion=self.canvas_grupo.bbox("all"))
 
     # ------------------------------------------------------------------
     # Lógica de la UI — simulación
@@ -357,8 +698,14 @@ class AplicacionPeluqueria:
         hora_j_str = self.entrada_hora_j.get().strip()
         iter_i_str = self.entrada_iter_i.get().strip()
         filas_pp_str = self.entrada_filas_por_pagina.get().strip()
+        porc_col_str = self.entrada_porc_colorista.get().strip()
+        porc_pa_str = self.entrada_porc_peluquero_a.get().strip()
+        llegada_min_str = self.entrada_llegada_min.get().strip()
+        llegada_max_str = self.entrada_llegada_max.get().strip()
+        t_col_str = self.entrada_t_colorista.get().strip()
+        t_pel_str = self.entrada_t_peluqueros.get().strip()
 
-        # Validar inputs de simulación
+        # Validar inputs básicos
         valido, error = validar_inputs_simulacion(
             n_dias_str, x_cola_str, h_euler_str, hora_j_str, iter_i_str
         )
@@ -371,6 +718,24 @@ class AplicacionPeluqueria:
             messagebox.showerror("Error de validación", error)
             return
 
+        # Validar porcentajes
+        valido, error = validar_porcentajes(porc_col_str, porc_pa_str)
+        if not valido:
+            messagebox.showerror("Error de validación", error)
+            return
+
+        # Validar límites de llegada
+        valido, error = validar_limites_llegada(llegada_min_str, llegada_max_str)
+        if not valido:
+            messagebox.showerror("Error de validación", error)
+            return
+
+        # Validar T Euler
+        valido, error = validar_t_euler(t_col_str, t_pel_str)
+        if not valido:
+            messagebox.showerror("Error de validación", error)
+            return
+
         n_dias = int(n_dias_str)
         x_cola = int(x_cola_str)
         h_euler = float(h_euler_str)
@@ -379,8 +744,23 @@ class AplicacionPeluqueria:
         self.filas_por_pagina = int(filas_pp_str)
         self.h_euler_actual = h_euler
 
+        prob_colorista = float(porc_col_str) / 100.0
+        prob_peluquero_a = float(porc_pa_str) / 100.0
+        llegada_min = float(llegada_min_str)
+        llegada_max = float(llegada_max_str)
+        t_colorista = int(t_col_str)
+        t_peluqueros = int(t_pel_str)
+
         # Ejecutar simulación
-        resultados = simular(n_dias, x_cola, h_euler)
+        resultados = simular(
+            n_dias, x_cola, h_euler,
+            prob_colorista=prob_colorista,
+            prob_peluquero_a=prob_peluquero_a,
+            llegada_min=llegada_min,
+            llegada_max=llegada_max,
+            t_colorista=t_colorista,
+            t_peluqueros=t_peluqueros,
+        )
 
         # Actualizar panel de resultados
         self._actualizar_resultados(resultados, x_cola)
@@ -421,12 +801,6 @@ class AplicacionPeluqueria:
         self.total_paginas = max(1, -(-total // self.filas_por_pagina))
         self._ir_a_pagina(1)
 
-        # Limpiar panel de objetos
-        self._limpiar_tarjetas()
-        self.label_objetos_titulo.config(
-            text="Seleccioná una fila del vector de estado para ver los clientes activos."
-        )
-
     def _actualizar_resultados(self, resultados: dict, x_cola: int):
         self.label_recaudacion.config(
             text=f"${resultados['promedio_recaudacion']:,.2f}"
@@ -446,132 +820,6 @@ class AplicacionPeluqueria:
         self.label_probabilidad.master.winfo_children()[0].config(
             text=f"P(cola > {x_cola} personas):"
         )
-
-    # ------------------------------------------------------------------
-    # Panel de objetos temporales
-    # ------------------------------------------------------------------
-
-    def _on_seleccion_fila(self, event=None):
-        """Cuando se selecciona una fila, mostrar tarjetas de clientes activos."""
-        seleccion = self.tabla.selection()
-        if not seleccion:
-            return
-
-        item = seleccion[0]
-        valores = self.tabla.item(item, "values")
-        if not valores:
-            return
-
-        nro_fila = int(valores[0])
-        reloj = valores[3]
-        dia = valores[1]
-
-        clientes = self.objetos_por_fila.get(nro_fila, [])
-
-        self._limpiar_tarjetas()
-
-        if not clientes:
-            self.label_objetos_titulo.config(
-                text=f"No hay objetos temporales en T = {reloj} min (Iteración {nro_fila}) — Día {dia}",
-                fg="#e74c3c",
-            )
-            return
-
-        self.label_objetos_titulo.config(
-            text=f"OBJETOS PRESENTES EN T = {reloj} MIN (ITERACIÓN {nro_fila}) — Día {dia}",
-            font=("Helvetica", 9, "bold"), fg="#2c3e50",
-        )
-
-        for cliente in clientes:
-            self._crear_tarjeta_cliente(cliente)
-
-        self._on_tarjetas_configure()
-
-    def _limpiar_tarjetas(self):
-        """Elimina todas las tarjetas del panel."""
-        for widget in self.frame_tarjetas.winfo_children():
-            widget.destroy()
-
-    def _crear_tarjeta_cliente(self, cliente):
-        """Crea una tarjeta visual para un cliente."""
-        tipo_nombre = _NOMBRE_TIPO.get(cliente.tipo, cliente.tipo)
-
-        # Colores según estado
-        colores_estado = {
-            "en_cola": ("#f39c12", "#fef9e7"),      # naranja
-            "siendo_atendido": ("#27ae60", "#eafaf1"), # verde
-            "atendido": ("#95a5a6", "#f2f3f4"),       # gris
-        }
-        color_borde, color_fondo = colores_estado.get(
-            cliente.estado, ("#3498db", "#eaf2f8")
-        )
-
-        estado_texto = {
-            "en_cola": f"En cola {tipo_nombre}",
-            "siendo_atendido": f"Atendido por {tipo_nombre}",
-            "atendido": "Atendido",
-        }
-
-        tarjeta = tk.Frame(
-            self.frame_tarjetas,
-            bg=color_fondo, bd=2,
-            relief=tk.SOLID,
-            highlightbackground=color_borde,
-            highlightthickness=2,
-            padx=10, pady=8,
-        )
-        tarjeta.pack(side=tk.LEFT, padx=5, pady=4)
-
-        # Título
-        tk.Label(
-            tarjeta, text=f"Cliente #{cliente.numero}",
-            font=("Helvetica", 10, "bold"), bg=color_fondo, fg="#2c3e50",
-        ).pack(anchor=tk.W)
-
-        # Estado con color
-        tk.Label(
-            tarjeta,
-            text=estado_texto.get(cliente.estado, cliente.estado),
-            font=("Helvetica", 9, "bold"), bg=color_fondo, fg=color_borde,
-        ).pack(anchor=tk.W, pady=(2, 4))
-
-        # Atributos
-        atributos = [
-            f"Llegó: {cliente.tiempo_llegada:.2f} min",
-        ]
-
-        if cliente.estado == "en_cola":
-            espera = cliente.tiempo_espera
-            atributos.append(f"Esperando: {espera:.2f} min")
-            hora_ini_refrig = cliente.tiempo_llegada + 30  # 30 minutos después de llegar
-            atributos.append(f"Hora Ini. Refrig: {hora_ini_refrig:.2f} min")
-        elif cliente.estado == "siendo_atendido":
-            atributos.append(f"Inicio at.: {cliente.tiempo_inicio_atencion:.2f} min")
-            if cliente.demora_calculada > 0:
-                atributos.append(f"Demora Euler: {cliente.demora_calculada:.2f} min")
-                atributos.append(f"C={cliente.longitud_cola_al_inicio}")
-
-        for attr in atributos:
-            tk.Label(
-                tarjeta, text=attr,
-                font=("Helvetica", 8), bg=color_fondo, fg="#555555",
-            ).pack(anchor=tk.W)
-
-        # Botón "Ver tabla Euler" solo si tiene pasos
-        if cliente.pasos_euler:
-            tk.Button(
-                tarjeta,
-                text="Ver tabla Euler",
-                command=lambda c=cliente: self._abrir_euler_dialog(c),
-                bg=color_borde, fg="white",
-                font=("Helvetica", 8, "bold"),
-                relief=tk.FLAT, cursor="hand2",
-                padx=8, pady=2,
-            ).pack(anchor=tk.W, pady=(6, 0))
-
-    def _abrir_euler_dialog(self, cliente):
-        """Abre la ventana de detalle de integración Euler para un cliente."""
-        EulerDialog(self.ventana, cliente, self.h_euler_actual)
 
     # ------------------------------------------------------------------
     # Lógica de paginación

@@ -85,7 +85,10 @@ def euler_con_detalle(f, t0: float, y0: float, h: float, C: int, T: int):
     return t, pasos
 
 
-def calcular_demora_corte(tipo_servidor: str, longitud_cola_inicial: int, h: float = 1.0, con_detalle: bool = False):
+def calcular_demora_corte(tipo_servidor: str, longitud_cola_inicial: int, h: float = 1.0,
+                          con_detalle: bool = False,
+                          t_colorista: int = T_COLORISTA,
+                          t_peluqueros: int = T_PELUQUEROS):
     """
     Calcula el tiempo de atención de un corte integrando la ecuación diferencial
     dD/dt = C + 0.2·T + t² mediante el método de Euler con paso h parametrizable.
@@ -96,8 +99,10 @@ def calcular_demora_corte(tipo_servidor: str, longitud_cola_inicial: int, h: flo
         tipo_servidor          -- "colorista", "peluquero_a" o "peluquero_b"
         longitud_cola_inicial  -- cantidad de clientes en cola al iniciar el corte (C)
         h                      -- número máximo de iteraciones (default 1.0)
-                                 Se calcula el paso real como: paso = T / (h * dDdt_inicial)
+                                  Se calcula el paso real como: paso = T / (h * dDdt_inicial)
         con_detalle            -- si True, retorna (demora, pasos); si False, solo demora
+        t_colorista            -- constante T para el colorista (default 180)
+        t_peluqueros           -- constante T para los peluqueros (default 130)
 
     Retorna:
         Si con_detalle=False: float con el tiempo total de atención.
@@ -107,9 +112,9 @@ def calcular_demora_corte(tipo_servidor: str, longitud_cola_inicial: int, h: flo
         ValueError  si tipo_servidor no es reconocido.
     """
     if tipo_servidor == "colorista":
-        T = T_COLORISTA
+        T = t_colorista
     elif tipo_servidor in ("peluquero_a", "peluquero_b"):
-        T = T_PELUQUEROS
+        T = t_peluqueros
     else:
         raise ValueError(f"Tipo de servidor desconocido: '{tipo_servidor}'")
 
@@ -132,3 +137,4 @@ def calcular_demora_corte(tipo_servidor: str, longitud_cola_inicial: int, h: flo
         return t_final, pasos
     else:
         return euler(derivada_demora, t0, D0, h, C, T)
+

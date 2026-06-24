@@ -24,8 +24,8 @@ _NOMBRE_TIPO = {
     "peluquero_b": "Pel.B",
 }
 
-# Encabezados de la tabla de eventos
-_COLUMNAS_TABLA = [
+# Encabezados base de la tabla de eventos (sin columnas de clientes)
+_COLUMNAS_TABLA_BASE = [
     "Nro", "Día", "Evento", "Reloj (min)", "Reloj (HH:MM)",
     "RND Llegada", "T. Entre Lleg.", "Próx. Llegada",
     "RND Tipo", "Tipo Asignado",
@@ -37,15 +37,30 @@ _COLUMNAS_TABLA = [
     "Clientes Atend.", "Máx Cola Total",
 ]
 
+# Columnas por cada cliente temporal
+_COLS_POR_CLIENTE = ["Estado", "Llegada", "Ini. At."]
 
-def simular(n_dias: int, x_cola: int, h_euler: float = 1.0) -> dict:
+
+def simular(n_dias: int, x_cola: int, h_euler: float = 1.0,
+            prob_colorista: float = PROB_COLORISTA,
+            prob_peluquero_a: float = PROB_PELUQUERO_A,
+            llegada_min: float = LLEGADA_MIN,
+            llegada_max: float = LLEGADA_MAX,
+            t_colorista: int = 180,
+            t_peluqueros: int = 130) -> dict:
     """
     Ejecuta la simulación de N días de la peluquería.
 
     Parámetros:
-        n_dias   -- cantidad de días a simular
-        x_cola   -- umbral para calcular P(cola > x_cola)
-        h_euler  -- paso de integración Euler (default 1.0)
+        n_dias           -- cantidad de días a simular
+        x_cola           -- umbral para calcular P(cola > x_cola)
+        h_euler          -- paso de integración Euler (default 1.0)
+        prob_colorista   -- probabilidad de ser atendido por el Colorista
+        prob_peluquero_a -- probabilidad de ser atendido por el Peluquero A
+        llegada_min      -- límite inferior de U(A, B) para tiempo entre llegadas
+        llegada_max      -- límite superior de U(A, B) para tiempo entre llegadas
+        t_colorista      -- constante T de la ED para el Colorista
+        t_peluqueros     -- constante T de la ED para los Peluqueros
 
     Retorna:
         Diccionario con resultados estadísticos, filas de la tabla,
@@ -65,11 +80,17 @@ def simular(n_dias: int, x_cola: int, h_euler: float = 1.0) -> dict:
         resultado, iteraciones_dia, recaudacion_acumulada, bebidas_acumuladas, costo_bebidas_acumulado = _simular_dia(
             numero_dia,
             h_euler,
-            nro_fila_global,
-            iteraciones_totales,
-            recaudacion_acumulada,
-            bebidas_acumuladas,
-            costo_bebidas_acumulado,
+            nro_fila_offset=nro_fila_global,
+            iteraciones_previas=iteraciones_totales,
+            recaudacion_inicial=recaudacion_acumulada,
+            bebidas_inicial=bebidas_acumuladas,
+            costo_bebidas_inicial=costo_bebidas_acumulado,
+            prob_colorista=prob_colorista,
+            prob_peluquero_a=prob_peluquero_a,
+            llegada_min=llegada_min,
+            llegada_max=llegada_max,
+            t_colorista=t_colorista,
+            t_peluqueros=t_peluqueros,
         )
         resultados.append(resultado)
 
@@ -89,7 +110,12 @@ def simular(n_dias: int, x_cola: int, h_euler: float = 1.0) -> dict:
 
     resumen = generar_resumen(recaudacion_acumulada, len(resultados), resultados, x_cola)
 
-    filas_tabla = [_COLUMNAS_TABLA] + todas_las_filas
+    # --- Post-proceso: agregar columnas de clientes temporales ---
+    filas_con_clientes, encabezados_completos = _agregar_columnas_clientes(
+        todas_las_filas, todos_los_objetos
+    )
+
+    filas_tabla = [encabezados_completos] + filas_con_clientes
 
     return {
         "promedio_recaudacion": resumen["promedio_recaudacion"],
@@ -104,11 +130,72 @@ def simular(n_dias: int, x_cola: int, h_euler: float = 1.0) -> dict:
     }
 
 
-def _seleccionar_tipo_con_rnd(rnd: float) -> str:
+def _agregar_columnas_clientes(filas: list, objetos_por_fila: dict) -> tuple:
+    """
+    Post-procesa las filas de la tabla para agregar columnas de clientes temporales.
+
+    Para cada fila, agrega 3 columnas por cada cliente activo en ese instante:
+    - Estado, Llegada, Ini. At.
+
+    Retorna:
+        (filas_extendidas, encabezados_completos)
+    """
+    # Determinar el máximo de clientes simultáneos en cualquier fila
+    max_clientes = 0
+    for clientes in objetos_por_fila.values():
+        if len(clientes) > max_clientes:
+            max_clientes = len(clientes)
+
+    # Generar encabezados dinámicos
+    encabezados_clientes = []
+    for i in range(1, max_clientes + 1):
+        for col in _COLS_POR_CLIENTE:
+            encabezados_clientes.append(f"Cli {i} {col}")
+
+    encabezados_completos = list(_COLUMNAS_TABLA_BASE) + encabezados_clientes
+
+    cols_vacias = ["-"] * (max_clientes * len(_COLS_POR_CLIENTE))
+
+    filas_extendidas = []
+    for fila in filas:
+        nro_fila = int(fila[0])
+        clientes = objetos_por_fila.get(nro_fila, [])
+
+        columnas_clientes = []
+        for cliente in clientes:
+            tipo_nombre = _NOMBRE_TIPO.get(cliente.tipo, cliente.tipo)
+
+            # Estado
+            if cliente.estado == "en_cola":
+                estado_txt = f"Cola {tipo_nombre}"
+            elif cliente.estado == "siendo_atendido":
+                estado_txt = f"Atend. {tipo_nombre}"
+            else:
+                estado_txt = "Atendido"
+
+            columnas_clientes.append(estado_txt)
+            columnas_clientes.append(f"{cliente.tiempo_llegada:.2f}")
+
+            if cliente.estado == "siendo_atendido" and cliente.tiempo_inicio_atencion > 0:
+                columnas_clientes.append(f"{cliente.tiempo_inicio_atencion:.2f}")
+            else:
+                columnas_clientes.append("-")
+
+        # Rellenar columnas faltantes con "-"
+        faltan = (max_clientes * len(_COLS_POR_CLIENTE)) - len(columnas_clientes)
+        if faltan > 0:
+            columnas_clientes.extend(["-"] * faltan)
+
+        filas_extendidas.append(list(fila) + columnas_clientes)
+
+    return filas_extendidas, encabezados_completos
+
+
+def _seleccionar_tipo_con_rnd(rnd: float, prob_colorista: float, prob_peluquero_a: float) -> str:
     """Selecciona el tipo de cliente basándose en un RND dado."""
-    if rnd < PROB_COLORISTA:
+    if rnd < prob_colorista:
         return "colorista"
-    elif rnd < PROB_COLORISTA + PROB_PELUQUERO_A:
+    elif rnd < prob_colorista + prob_peluquero_a:
         return "peluquero_a"
     else:
         return "peluquero_b"
@@ -207,7 +294,13 @@ def _generar_snapshot(nro_fila, dia, tipo_evento, reloj,
 def _simular_dia(numero_dia: int, h_euler: float,
                  nro_fila_offset: int, iteraciones_previas: int,
                  recaudacion_inicial: float, bebidas_inicial: int,
-                 costo_bebidas_inicial: float) -> tuple:
+                 costo_bebidas_inicial: float,
+                 prob_colorista: float = PROB_COLORISTA,
+                 prob_peluquero_a: float = PROB_PELUQUERO_A,
+                 llegada_min: float = LLEGADA_MIN,
+                 llegada_max: float = LLEGADA_MAX,
+                 t_colorista: int = 180,
+                 t_peluqueros: int = 130) -> tuple:
     """
     Simula un día completo de la peluquería.
 
@@ -252,7 +345,7 @@ def _simular_dia(numero_dia: int, h_euler: float,
 
     # ---- Generar primera llegada ----
     rnd_llegada = random.random()
-    tiempo_entre = LLEGADA_MIN + (LLEGADA_MAX - LLEGADA_MIN) * rnd_llegada
+    tiempo_entre = llegada_min + (llegada_max - llegada_min) * rnd_llegada
     prox_llegada = tiempo_entre
 
     nro_fila_actual = nro_fila_offset + nro_fila_local
@@ -288,7 +381,7 @@ def _simular_dia(numero_dia: int, h_euler: float,
 
             numero_cliente += 1
             rnd_tipo = random.random()
-            tipo_cliente = _seleccionar_tipo_con_rnd(rnd_tipo)
+            tipo_cliente = _seleccionar_tipo_con_rnd(rnd_tipo, prob_colorista, prob_peluquero_a)
 
             cliente = Cliente(
                 numero=numero_cliente,
@@ -308,7 +401,8 @@ def _simular_dia(numero_dia: int, h_euler: float,
                 cliente.longitud_cola_al_inicio = len(cola)
 
                 demora, pasos = calcular_demora_corte(
-                    tipo_cliente, len(cola), h=h_euler, con_detalle=True
+                    tipo_cliente, len(cola), h=h_euler, con_detalle=True,
+                    t_colorista=t_colorista, t_peluqueros=t_peluqueros,
                 )
                 cliente.demora_calculada = demora
                 cliente.pasos_euler = pasos
@@ -336,7 +430,7 @@ def _simular_dia(numero_dia: int, h_euler: float,
 
             # Generar próxima llegada
             rnd_llegada_sig = random.random()
-            t_entre = LLEGADA_MIN + (LLEGADA_MAX - LLEGADA_MIN) * rnd_llegada_sig
+            t_entre = llegada_min + (llegada_max - llegada_min) * rnd_llegada_sig
             prox_llegada = reloj + t_entre
 
             if prox_llegada < DURACION_RECEPCION_MIN:
@@ -397,7 +491,8 @@ def _simular_dia(numero_dia: int, h_euler: float,
                 next_cliente.longitud_cola_al_inicio = longitud_cola
 
                 demora, pasos = calcular_demora_corte(
-                    tipo_servidor, longitud_cola, h=h_euler, con_detalle=True
+                    tipo_servidor, longitud_cola, h=h_euler, con_detalle=True,
+                    t_colorista=t_colorista, t_peluqueros=t_peluqueros,
                 )
                 next_cliente.demora_calculada = demora
                 next_cliente.pasos_euler = pasos
@@ -423,7 +518,7 @@ def _simular_dia(numero_dia: int, h_euler: float,
             nro_fila_actual = nro_fila_offset + nro_fila_local
             resultado.filas_tabla.append(
                 _generar_snapshot(
-                    nro_fila_actual, numero_dia, f"Fin At. {nombre}", reloj,
+                    nro_fila_actual, numero_dia, f"Fin At. {nombre} (Cli {cliente.numero})", reloj,
                     cliente.numero, None, None, None,
                     None, None, servidores, colas, fin_atencion,
                     eventos,
