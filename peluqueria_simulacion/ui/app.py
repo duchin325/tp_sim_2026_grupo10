@@ -192,7 +192,7 @@ class AplicacionPeluqueria:
             ("Clientes atendidos (total):",   "label_clientes",     "0"),
             ("Bebidas entregadas (total):",   "label_bebidas",      "0"),
             ("Costo total de bebidas:",       "label_costo_bebidas","$0.00"),
-            ("Iteraciones totales:",          "label_iteraciones",  "0"),
+            #("Iteraciones totales:",          "label_iteraciones",  "0"),
             ("Días simulados:",               "label_dias_sim",     "0"),
         ]
 
@@ -439,7 +439,7 @@ class AplicacionPeluqueria:
         self.label_costo_bebidas.config(
             text=f"${resultados['costo_total_bebidas']:,.2f}"
         )
-        self.label_iteraciones.config(text=str(resultados.get("iteraciones_totales", "?")))
+        #self.label_iteraciones.config(text=str(resultados.get("iteraciones_totales", "?")))
         self.label_dias_sim.config(text=str(resultados.get("dias_simulados", "?")))
 
         # Actualizar label de probabilidad con el valor de X

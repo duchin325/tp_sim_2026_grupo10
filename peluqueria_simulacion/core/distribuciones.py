@@ -7,7 +7,7 @@ PROB_PELUQUERO_B = 0.40
 
 # Límites de la distribución de llegadas
 LLEGADA_MIN = 2
-LLEGADA_MAX = 12
+LLEGADA_MAX = 5
 
 
 def generar_tiempo_llegada() -> float:

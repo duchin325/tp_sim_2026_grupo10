@@ -57,7 +57,7 @@ def euler(f, t0: float, y0: float, h: float, C: int, T: int) -> float:
     t = t0
     y = y0
     while y < T:
-        y = y + f(t, y, C, T)
+        y = y + h*f(t, y, C, T)
         t = t + h
     return t
 
@@ -77,7 +77,7 @@ def euler_con_detalle(f, t0: float, y0: float, h: float, C: int, T: int):
     paso_num = 0
     while y < T:
         dDdt = f(t, y, C, T)
-        y_nuevo = y + dDdt
+        y_nuevo = y + h*dDdt
         pasos.append((paso_num, t, y, dDdt, y_nuevo))
         y = y_nuevo
         t = t + h
@@ -95,7 +95,7 @@ def calcular_demora_corte(tipo_servidor: str, longitud_cola_inicial: int, h: flo
     Parámetros:
         tipo_servidor          -- "colorista", "peluquero_a" o "peluquero_b"
         longitud_cola_inicial  -- cantidad de clientes en cola al iniciar el corte (C)
-        h                      -- número máximo de iteraciones (default 1.0)
+        h                      -- paso de integración (en minutos, default 1.0)
                                  Se calcula el paso real como: paso = T / (h * dDdt_inicial)
         con_detalle            -- si True, retorna (demora, pasos); si False, solo demora
 
@@ -117,15 +117,6 @@ def calcular_demora_corte(tipo_servidor: str, longitud_cola_inicial: int, h: flo
     t0 = 0.0
     D0 = 0.0  # demora inicial: 0 al comenzar el corte
 
-    # Calcular dD/dt inicial (en t=0, D=0)
-    dDdt_inicial = derivada_demora(0, 0, C, T)
-    
-    # Calcular paso adaptativo basado en h (número de iteraciones máximo)
-    # paso = T / (h * dDdt_inicial) asegura que no requiera más de h iteraciones
-    if dDdt_inicial > 0:
-        paso = T / (max(h, 1) * dDdt_inicial)
-    else:
-        paso = 1.0  # fallback si dDdt_inicial == 0
 
     if con_detalle:
         t_final, pasos = euler_con_detalle(derivada_demora, t0, D0, h, C, T)
