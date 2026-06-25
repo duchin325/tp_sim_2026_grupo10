@@ -29,9 +29,9 @@ _COLUMNAS_TABLA_BASE = [
     "Nro", "Día", "Evento", "Reloj (min)", "Reloj (HH:MM)",
     "RND Llegada", "T. Entre Lleg.", "Próx. Llegada",
     "RND Tipo", "Tipo Asignado",
-    "Col. Estado", "Col. Cola", "Col. Fin At.",
-    "PA Estado", "PA Cola", "PA Fin At.",
-    "PB Estado", "PB Cola", "PB Fin At.",
+    "Col. Estado", "Col. T.At.", "Col. Fin At.", "Col. Cola",
+    "PA Estado", "PA T.At.", "PA Fin At.", "PA Cola",
+    "PB Estado", "PB T.At.", "PB Fin At.", "PB Cola",
     "Próx. Eventos",
     "Acum. Recaud.", "Acum. Bebidas", "Acum. Costo Beb.",
     "Clientes Atend.", "Máx Cola Total",
@@ -307,9 +307,12 @@ def _generar_snapshot(nro_fila, dia, tipo_evento, reloj,
     for tipo in ["colorista", "peluquero_a", "peluquero_b"]:
         s = servidores[tipo]
         estado = "Ocupado" if s.ocupado else "Libre"
-        cola_len = str(len(colas[tipo]))
+        t_at = (f"{s.cliente_actual.demora_calculada:.2f}"
+                if s.ocupado and s.cliente_actual and s.cliente_actual.demora_calculada
+                else "-")
         fin = f"{fin_atencion[tipo]:.2f}" if s.ocupado else "-"
-        fila.extend([estado, cola_len, fin])
+        cola_len = str(len(colas[tipo]))
+        fila.extend([estado, t_at, fin, cola_len])
 
     # Próximos eventos programados
     fila.append(_formato_proximos_eventos(eventos_heap))
@@ -479,7 +482,7 @@ def _simular_dia(numero_dia: int, h_euler: float,
             nro_fila_actual = nro_fila_offset + nro_fila_local
             resultado.filas_tabla.append(
                 _generar_snapshot(
-                    nro_fila_actual, numero_dia, "Llegada Cliente", reloj,
+                    nro_fila_actual, numero_dia, f"Llegada Cliente (Cli {numero_cliente})", reloj,
                     numero_cliente, rnd_llegada_sig, t_entre, prox_llegada,
                     rnd_tipo, tipo_cliente, servidores, colas, fin_atencion,
                     eventos,

@@ -1,3 +1,4 @@
+import re
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -32,6 +33,9 @@ class AplicacionPeluqueria:
         # Datos de objetos temporales (nro_fila -> lista de clientes)
         self.objetos_por_fila: dict = {}
         self.h_euler_actual: float = 1.0
+
+        # Cache de encabezados para evitar reconfigurar columnas en cada página
+        self._ultimo_encabezados: list = []
 
         self.ventana = tk.Tk()
         self.ventana.geometry("1600x1000")
@@ -167,7 +171,7 @@ class AplicacionPeluqueria:
         # i iteraciones
         tk.Label(caja_vis, text="i (Filas a mostrar):", **lbl_style).grid(row=1, column=0, sticky=tk.W, padx=3, pady=2)
         self.entrada_iter_i = tk.Entry(caja_vis, width=entry_width)
-        self.entrada_iter_i.insert(0, "100")
+        self.entrada_iter_i.insert(0, "500")
         self.entrada_iter_i.grid(row=1, column=1, sticky=tk.W, padx=3)
 
         # Filas por página
@@ -241,7 +245,7 @@ class AplicacionPeluqueria:
         frame_boton = tk.Frame(contenedor)
         frame_boton.grid(row=0, column=1, padx=(20, 0), sticky="ns")
 
-        tk.Button(
+        self.btn_simular = tk.Button(
             frame_boton,
             text="▶  Simular",
             command=self._on_simular,
@@ -252,7 +256,8 @@ class AplicacionPeluqueria:
             pady=16,
             relief=tk.FLAT,
             cursor="hand2",
-        ).pack(expand=True, fill=tk.BOTH, padx=4, pady=4)
+        )
+        self.btn_simular.pack(expand=True, fill=tk.BOTH, padx=4, pady=4)
 
     def _actualizar_porc_pb(self, event=None):
         """Actualiza en tiempo real el label de % Peluquero B."""
@@ -308,19 +313,16 @@ class AplicacionPeluqueria:
         frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=(2, 2))
 
         # --- Barra de encabezados de grupo (para clientes) ---
-        self.frame_grupo_header = tk.Frame(frame, height=20)
+        self.frame_grupo_header = tk.Frame(frame, height=22)
         self.frame_grupo_header.pack(fill=tk.X)
         self.frame_grupo_header.pack_propagate(False)
 
-        self.canvas_grupo = tk.Canvas(self.frame_grupo_header, height=20, bg="#2c3e50", highlightthickness=0)
+        self.canvas_grupo = tk.Canvas(self.frame_grupo_header, height=22, bg="#2c3e50", highlightthickness=0)
         self.canvas_grupo.pack(fill=tk.BOTH, expand=True)
 
         # Frame interno del canvas para los labels de grupo
         self.frame_grupo_labels = tk.Frame(self.canvas_grupo, bg="#2c3e50")
         self.canvas_grupo_window = self.canvas_grupo.create_window((0, 0), window=self.frame_grupo_labels, anchor=tk.NW)
-
-        # Ocultar inicialmente (se muestra cuando hay clientes)
-        self.frame_grupo_header.pack_forget()
 
         # --- Tabla principal ---
         scroll_y = tk.Scrollbar(frame, orient=tk.VERTICAL)
@@ -372,9 +374,9 @@ class AplicacionPeluqueria:
             "Nro", "Día", "Evento", "Reloj (min)", "Reloj (HH:MM)",
             "RND Llegada", "T. Entre Lleg.", "Próx. Llegada",
             "RND Tipo", "Tipo Asignado",
-            "Col. Estado", "Col. Cola", "Col. Fin At.",
-            "PA Estado", "PA Cola", "PA Fin At.",
-            "PB Estado", "PB Cola", "PB Fin At.",
+            "Col. Estado", "Col. T.At.", "Col. Fin At.", "Col. Cola",
+            "PA Estado", "PA T.At.", "PA Fin At.", "PA Cola",
+            "PB Estado", "PB T.At.", "PB Fin At.", "PB Cola",
             "Próx. Eventos",
             "Acum. Recaud.", "Acum. Bebidas", "Acum. Costo Beb.",
             "Clientes Atend.", "Máx Cola Total",
@@ -446,7 +448,39 @@ class AplicacionPeluqueria:
         columnas = self.tabla["columns"]
         col_id_name = columnas[col_idx] if col_idx < len(columnas) else f"Col {col_idx}"
 
-        import re
+        # Verificar si es una columna de T.At. (Tiempo Atención) para abrir Euler
+        _t_at_tipo = {
+            "Col. T.At.": "colorista",
+            "PA T.At.": "peluquero_a",
+            "PB T.At.": "peluquero_b",
+        }
+        if col_id_name in _t_at_tipo:
+            tipo_servidor = _t_at_tipo[col_id_name]
+            try:
+                nro_evento = int(valores[0])
+            except ValueError:
+                return
+            clientes_en_fila = self.objetos_por_fila.get(nro_evento, [])
+            cliente_atendido = None
+            for c in clientes_en_fila:
+                if c.estado == "siendo_atendido" and c.tipo == tipo_servidor:
+                    cliente_atendido = c
+                    break
+
+            menu = tk.Menu(self.ventana, tearoff=0)
+            if cliente_atendido and getattr(cliente_atendido, "pasos_euler", []):
+                menu.add_command(
+                    label=f"Ver tabla Euler (Cliente {cliente_atendido.numero})",
+                    command=lambda c=cliente_atendido: self._abrir_dialogo_euler(c)
+                )
+            else:
+                menu.add_command(
+                    label="Sin datos de Euler disponibles",
+                    state=tk.DISABLED
+                )
+            menu.tk_popup(event.x_root, event.y_root)
+            return
+
         match = re.match(r"^Cli (\d+) (.+)$", col_id_name)
         if not match:
             return
@@ -540,9 +574,10 @@ class AplicacionPeluqueria:
 
         # Anchos personalizados por tipo de columna
         anchos = {
-            "Nro": 50, "Día": 40, "Evento": 130,
+            "Nro": 50, "Día": 40, "Evento": 190,
             "Reloj (min)": 80, "Reloj (HH:MM)": 85,
             "Próx. Eventos": 200,
+            "Col. T.At.": 75, "PA T.At.": 75, "PB T.At.": 75,
         }
 
         import re
@@ -592,11 +627,12 @@ class AplicacionPeluqueria:
         self._construir_grupo_headers(columnas, grupos_clientes, anchos)
 
     def _construir_grupo_headers(self, columnas: list, grupos_clientes: list, anchos: dict):
-        return
+        # Limpiar labels de grupo existentes antes de reconstruir
+        for widget in self.frame_grupo_labels.winfo_children():
+            widget.destroy()
 
-        # Mostrar la barra de grupo
-        self.frame_grupo_header.pack(fill=tk.X)
-        self.frame_grupo_header.config(height=22)
+        if not grupos_clientes:
+            return
 
         # Mapear qué columnas pertenecen a qué cliente
         grupo_dict = {}
@@ -713,6 +749,29 @@ class AplicacionPeluqueria:
         t_colorista = int(t_col_str)
         t_peluqueros = int(t_pel_str)
 
+        # Mostrar cursor de espera y desactivar botón durante simulación
+        self.ventana.config(cursor="wait")
+        self.btn_simular.config(text="⏳ Simulando...", state=tk.DISABLED, bg="#2ecc71")
+        self.ventana.update_idletasks()
+
+        try:
+            self._ejecutar_simulacion(
+                n_dias, x_cola, h_euler, hora_j, iter_i,
+                prob_colorista, prob_peluquero_a,
+                llegada_min, llegada_max,
+                t_colorista, t_peluqueros,
+            )
+        except Exception as e:
+            messagebox.showerror("Error de simulación", str(e))
+        finally:
+            self.ventana.config(cursor="")
+            self.btn_simular.config(text="▶  Simular", state=tk.NORMAL, bg="#27ae60")
+
+    def _ejecutar_simulacion(self, n_dias, x_cola, h_euler, hora_j, iter_i,
+                              prob_colorista, prob_peluquero_a,
+                              llegada_min, llegada_max,
+                              t_colorista, t_peluqueros):
+        """Lógica de simulación separada para manejar cursor de espera."""
         # Ejecutar simulación
         resultados = simular(
             n_dias, x_cola, h_euler,
@@ -754,13 +813,21 @@ class AplicacionPeluqueria:
                 filas_filtradas.append(ultima_fila)
 
             self.filas_simuladas = filas_filtradas
+
+            # Guardar encabezados completos (sin recortar) para recorte por página
+            self.encabezados_completos = list(self.encabezados)
+
             self.label_filtro_info.config(
                 text=f"Mostrando {len(filas_filtradas)} filas (desde min {hora_j}, "
                      f"máx {iter_i}) de {len(todas_las_filas)} totales"
             )
         else:
             self.filas_simuladas = []
+            self.encabezados_completos = []
             self.label_filtro_info.config(text="")
+
+        # Forzar reconfiguración de columnas en la próxima renderización
+        self._ultimo_encabezados = []
 
         total = len(self.filas_simuladas)
         self.total_paginas = max(1, -(-total // self.filas_por_pagina))
@@ -839,9 +906,15 @@ class AplicacionPeluqueria:
 
         inicio = (self.pagina_actual - 1) * self.filas_por_pagina
         fin = inicio + self.filas_por_pagina
-        filas_visibles = self.filas_simuladas[inicio:fin]
+        filas_pagina = self.filas_simuladas[inicio:fin]
 
-        self._renderizar_tabla(filas_visibles)
+        # Recortar columnas de clientes vacías para ESTA página solamente
+        enc_pagina, filas_recortadas = self._recortar_columnas_vacias(
+            self.encabezados_completos, filas_pagina
+        )
+        self.encabezados = enc_pagina
+
+        self._renderizar_tabla(filas_recortadas)
         self._actualizar_controles_paginacion()
 
     def _on_primera_pagina(self):
@@ -858,8 +931,10 @@ class AplicacionPeluqueria:
 
     def _renderizar_tabla(self, filas: list):
         self.tabla.delete(*self.tabla.get_children())
-        if self.encabezados:
+        # Solo reconfigurar columnas si los encabezados cambiaron (evita rebuild costoso por página)
+        if self.encabezados and self.encabezados != self._ultimo_encabezados:
             self._configurar_columnas_tabla(self.encabezados)
+            self._ultimo_encabezados = list(self.encabezados)
 
         # Configurar colores alternados (zebra striping)
         self.tabla.tag_configure("par", background="#e8ecf1")
@@ -895,6 +970,57 @@ class AplicacionPeluqueria:
         self.btn_ultima.config(state=tk.DISABLED if es_ultima else tk.NORMAL)
 
     # ------------------------------------------------------------------
+
+    def _recortar_columnas_vacias(self, encabezados: list, filas: list):
+        """Elimina grupos de columnas de clientes que están completamente vacíos
+        en las filas visibles.  Reduce drásticamente la cantidad de columnas
+        del Treeview y mejora el rendimiento de renderizado."""
+        if not encabezados or not filas:
+            return encabezados, filas
+
+        # Encontrar dónde empiezan las columnas de clientes
+        primer_cli_idx = None
+        for i, col in enumerate(encabezados):
+            if re.match(r"^Cli \d+ ", col):
+                primer_cli_idx = i
+                break
+
+        if primer_cli_idx is None:
+            return encabezados, filas  # Sin columnas de clientes
+
+        cols_por_cliente = 4  # Estado, Hs Refrig, ¿Refrig?, Costo
+        num_cols_cli = len(encabezados) - primer_cli_idx
+        num_grupos = num_cols_cli // cols_por_cliente
+
+        # Determinar qué grupos tienen al menos un dato no vacío
+        grupos_con_datos = set()
+        for fila in filas:
+            for g in range(num_grupos):
+                inicio = primer_cli_idx + g * cols_por_cliente
+                if inicio < len(fila):
+                    vals = fila[inicio:inicio + cols_por_cliente]
+                    if any(v and str(v).strip() for v in vals):
+                        grupos_con_datos.add(g)
+            # Optimización: si ya encontramos todos, salir temprano
+            if len(grupos_con_datos) == num_grupos:
+                break
+
+        if len(grupos_con_datos) == num_grupos:
+            return encabezados, filas  # Todos tienen datos, no recortar
+
+        # Construir lista de índices a mantener (base + grupos con datos)
+        indices = list(range(primer_cli_idx))
+        for g in sorted(grupos_con_datos):
+            inicio = primer_cli_idx + g * cols_por_cliente
+            indices.extend(range(inicio, inicio + cols_por_cliente))
+
+        nuevos_enc = [encabezados[i] for i in indices]
+        nuevas_filas = [
+            [fila[i] if i < len(fila) else "" for i in indices]
+            for fila in filas
+        ]
+
+        return nuevos_enc, nuevas_filas
 
     def ejecutar(self):
         self.ventana.mainloop()
