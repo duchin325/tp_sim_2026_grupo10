@@ -295,8 +295,9 @@ class AplicacionPeluqueria:
             ("Clientes atendidos (total):",   "label_clientes",     "0"),
             ("Bebidas entregadas (total):",   "label_bebidas",      "0"),
             ("Costo total de bebidas:",       "label_costo_bebidas","$0.00"),
-            ("Iteraciones totales:",          "label_iteraciones",  "0"),
+
             ("Días simulados:",               "label_dias_sim",     "0"),
+            ("Días cola > X:",                "label_dias_superados", "0"),
         ]
 
         for col, (texto, atributo, placeholder) in enumerate(definiciones):
@@ -421,8 +422,15 @@ class AplicacionPeluqueria:
         nombre_display = getattr(self, '_nombre_completo_columna', {}).get(col_id_name, col_id_name)
         valor = valores[col_idx]
 
+        # Mostrar día, reloj y evento de la fila seleccionada
+        valores_por_columna = {col: valores[i] for i, col in enumerate(columnas)}
+        dia = valores_por_columna.get("Día", "")
+        reloj = valores_por_columna.get("Reloj (min)", valores_por_columna.get("Reloj (HH:MM)", ""))
+        evento = valores_por_columna.get("Evento", "")
+        detalle_principal = f"Día: {dia} | Reloj: {reloj} | Evento: {evento}"
+
         self.label_detalle_celda.config(
-            text=f"{nombre_display}:  {valor}",
+            text=detalle_principal,
             fg="#2c3e50",
         )
 
@@ -640,13 +648,47 @@ class AplicacionPeluqueria:
             for i in range(col_ini, col_fin + 1):
                 grupo_dict[i] = nro_cli
 
+        # Definir encabezados de servidor sobre las columnas de atención
+        servidor_groups = {}
+        servidor_defs = [
+            ("Colorista", ["Col. Estado", "Col. T.At.", "Col. Fin At.", "Col. Cola"]),
+            ("Peluquero A", ["PA Estado", "PA T.At.", "PA Fin At.", "PA Cola"]),
+            ("Peluquero B", ["PB Estado", "PB T.At.", "PB Fin At.", "PB Cola"]),
+        ]
+        for titulo, cols in servidor_defs:
+            try:
+                inicio = columnas.index(cols[0])
+            except ValueError:
+                continue
+            if all(inicio + j < len(columnas) and columnas[inicio + j] == cols[j] for j in range(len(cols))):
+                servidor_groups[inicio] = (titulo, inicio, inicio + len(cols) - 1)
+
         # Colores alternados para grupos de clientes
         colores_grupo = ["#1a5276", "#1e8449", "#7d3c98", "#b9770e", "#922b21", "#148f77"]
 
         self._labels_grupo_refs = []
         idx = 0
         while idx < len(columnas):
-            if idx in grupo_dict:
+            if idx in servidor_groups:
+                titulo, col_ini, col_fin = servidor_groups[idx]
+                ancho_total = sum(anchos.get(columnas[j], 95) for j in range(col_ini, col_fin + 1))
+
+                lbl_frame = tk.Frame(self.frame_grupo_labels, bg="#2c3e50", width=ancho_total, height=22,
+                                     relief=tk.RIDGE, bd=1)
+                lbl_frame.pack(side=tk.LEFT)
+                lbl_frame.pack_propagate(False)
+
+                lbl = tk.Label(
+                    lbl_frame,
+                    text=titulo,
+                    bg="#2c3e50", fg="white",
+                    font=("Helvetica", 8, "bold"),
+                )
+                lbl.pack(expand=True)
+                self._labels_grupo_refs.append(lbl)
+
+                idx = col_fin + 1
+            elif idx in grupo_dict:
                 # Inicio de un grupo de cliente
                 nro_cli = grupo_dict[idx]
                 ancho_total = 0
@@ -663,7 +705,7 @@ class AplicacionPeluqueria:
                 
                 lbl = tk.Label(
                     lbl_frame,
-                    text=f"Cliente {nro_cli}", # Texto estático (fallback)
+                    text=f"Cliente {nro_cli}",
                     bg=color, fg="white",
                     font=("Helvetica", 8, "bold"),
                 )
@@ -797,6 +839,7 @@ class AplicacionPeluqueria:
             self.encabezados, todas_las_filas = self._agregar_columna_contador_dias_supera_x(
                 encabezados_raw, filas_raw, x_cola
             )
+            self._actualizar_dias_superaron_x(self.encabezados, todas_las_filas, x_cola)
         else:
             self.encabezados = []
             todas_las_filas = []
@@ -845,13 +888,35 @@ class AplicacionPeluqueria:
         self.label_costo_bebidas.config(
             text=f"${resultados['costo_total_bebidas']:,.2f}"
         )
-        self.label_iteraciones.config(text=str(resultados.get("iteraciones_totales", "?")))
+        # self.label_iteraciones.config(text=str(resultados.get("iteraciones_totales", "?")))
         self.label_dias_sim.config(text=str(resultados.get("dias_simulados", "?")))
+        self.label_dias_superados.config(text="0")
 
         # Actualizar label de probabilidad con el valor de X
         self.label_probabilidad.master.winfo_children()[0].config(
             text=f"P(cola > {x_cola} personas):"
         )
+        self.label_dias_superados.master.winfo_children()[0].config(
+            text=f"Días cola > {x_cola}:")
+
+    def _actualizar_dias_superaron_x(self, encabezados: list, filas: list, x_cola: int):
+        contador_col = f"Días cola > {x_cola}"
+        try:
+            idx = encabezados.index(contador_col)
+        except ValueError:
+            self.label_dias_superados.config(text="0")
+            return
+
+        if not filas:
+            self.label_dias_superados.config(text="0")
+            return
+
+        try:
+            valor = filas[-1][idx]
+        except Exception:
+            valor = "0"
+
+        self.label_dias_superados.config(text=str(valor))
 
     def _agregar_columna_contador_dias_supera_x(self, encabezados: list, filas: list, x_cola: int):
         """Agrega una columna de contador por día para el umbral de cola X."""

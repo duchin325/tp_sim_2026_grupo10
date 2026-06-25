@@ -307,8 +307,10 @@ def _generar_snapshot(nro_fila, dia, tipo_evento, reloj,
     for tipo in ["colorista", "peluquero_a", "peluquero_b"]:
         s = servidores[tipo]
         estado = "Ocupado" if s.ocupado else "Libre"
+        tiempo_inicio = getattr(s.cliente_actual, "tiempo_inicio_atencion", None) if s.cliente_actual else None
         t_at = (f"{s.cliente_actual.demora_calculada:.2f}"
-                if s.ocupado and s.cliente_actual and s.cliente_actual.demora_calculada
+                if s.ocupado and s.cliente_actual and s.cliente_actual.demora_calculada is not None
+                and tiempo_inicio == reloj
                 else "-")
         fin = f"{fin_atencion[tipo]:.2f}" if s.ocupado else "-"
         cola_len = str(len(colas[tipo]))
@@ -442,6 +444,7 @@ def _simular_dia(numero_dia: int, h_euler: float,
                 cliente.tiempo_inicio_atencion = reloj
                 cliente.estado = "siendo_atendido"
                 cliente.longitud_cola_al_inicio = len(cola)
+                cliente.t_euler = t_colorista if tipo_cliente == "colorista" else t_peluqueros
 
                 demora, pasos = calcular_demora_corte(
                     tipo_cliente, len(cola), h=h_euler, con_detalle=True,
@@ -551,6 +554,7 @@ def _simular_dia(numero_dia: int, h_euler: float,
                 next_cliente.tiempo_inicio_atencion = reloj
                 next_cliente.estado = "siendo_atendido"
                 next_cliente.longitud_cola_al_inicio = longitud_cola
+                next_cliente.t_euler = t_colorista if tipo_servidor == "colorista" else t_peluqueros
 
                 demora, pasos = calcular_demora_corte(
                     tipo_servidor, longitud_cola, h=h_euler, con_detalle=True,

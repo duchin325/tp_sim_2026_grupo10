@@ -8,8 +8,6 @@ from tkinter import ttk, filedialog
 import csv
 import os
 
-from core.euler import T_COLORISTA, T_PELUQUEROS
-
 
 _NOMBRE_TIPO = {
     "colorista": "Colorista",
@@ -38,11 +36,7 @@ class EulerDialog(tk.Toplevel):
         c = self.cliente
         tipo_nombre = _NOMBRE_TIPO.get(c.tipo, c.tipo)
 
-        if c.tipo == "colorista":
-            T = T_COLORISTA
-        else:
-            T = T_PELUQUEROS
-
+        T = c.t_euler
         C = c.longitud_cola_al_inicio
 
         # ---- Encabezado con info del cliente y la ED ----
@@ -157,7 +151,7 @@ class EulerDialog(tk.Toplevel):
             return
 
         c = self.cliente
-        T = T_COLORISTA if c.tipo == "colorista" else T_PELUQUEROS
+        T = c.t_euler
 
         with open(filepath, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)

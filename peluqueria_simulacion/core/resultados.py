@@ -18,8 +18,7 @@ def calcular_probabilidad_mas_de_x(resultados: List[ResultadoDia], x: int) -> fl
     """
     if not resultados:
         return 0.0
-    dias_superado = sum(1 for r in resultados if r.max_cola_espera > x)
-    return dias_superado / len(resultados)
+    return sum(1 for r in resultados if r.max_cola_espera > x) / len(resultados)
 
 
 def calcular_total_clientes_atendidos(resultados: List[ResultadoDia]) -> int:
